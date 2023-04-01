@@ -42,12 +42,9 @@ if __name__ == '__main__':
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU, number of GPU is {}'.format(torch.cuda.device_count()))
+            print(f'Using Multi-GPU, number of GPU is {torch.cuda.device_count()}')
         else:
             print ('Using single GPU.')
-    else:
-        pass
- 
     args = parse_config()
     device = torch.device('cuda')
 
@@ -55,11 +52,14 @@ if __name__ == '__main__':
     assert args.model_name.startswith('t5')
     from transformers import T5Tokenizer
     ckpt_name = get_checkpoint_name(args.pretrained_path)
-    pretrained_path = args.pretrained_path + '/' + ckpt_name
+    pretrained_path = f'{args.pretrained_path}/{ckpt_name}'
     tokenizer = T5Tokenizer.from_pretrained(pretrained_path)
 
     from dataclass import Banking77
-    train_path, test_path = args.data_prefix + '/train.csv', args.data_prefix + '/test.csv'
+    train_path, test_path = (
+        f'{args.data_prefix}/train.csv',
+        f'{args.data_prefix}/test.csv',
+    )
     data = Banking77(tokenizer, train_path, test_path, datapoints_per_intent=10, format_mode=args.format_mode)
     print ('Data Loaded.')
 
@@ -70,11 +70,7 @@ if __name__ == '__main__':
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training
-        else:
-            pass
         model = model.to(device)
-    else:
-        pass
     print ('Model loaded')
 
     print ('-----------------------------------------')
@@ -84,7 +80,7 @@ if __name__ == '__main__':
         dev_batch_list = data.get_batches(args.number_of_gpu * args.batch_size_per_gpu, mode='test')
         dev_batch_num_per_epoch = len(dev_batch_list)
         dev_p = progressbar.ProgressBar(dev_batch_num_per_epoch)
-        print ('Number of evaluation batches is {}'.format(dev_batch_num_per_epoch))
+        print(f'Number of evaluation batches is {dev_batch_num_per_epoch}')
         dev_p.start()
         dev_pred_text_list, dev_reference_text_list = [], []
         for p_dev_idx in range(dev_batch_num_per_epoch):
@@ -107,25 +103,24 @@ if __name__ == '__main__':
                 dev_reference_text_list += model.parse_batch_text(dev_batch_input)
         dev_p.finish()
         assert len(dev_pred_text_list) == len(dev_reference_text_list)
-        dev_same_num = 0
-        for eva_idx in range(len(dev_pred_text_list)):
-            if dev_pred_text_list[eva_idx].strip() == dev_reference_text_list[eva_idx].strip():
-                dev_same_num += 1
+        dev_same_num = sum(
+            dev_pred_text_list[eva_idx].strip()
+            == dev_reference_text_list[eva_idx].strip()
+            for eva_idx in range(len(dev_pred_text_list))
+        )
         dev_acc = 100 * (dev_same_num / len(dev_pred_text_list))
-        print ('Inference accuracy is {}'.format(round(dev_acc,4)))
+        print(f'Inference accuracy is {round(dev_acc, 4)}')
 
         import os
         save_path = args.save_path
-        if os.path.exists(save_path):
-            pass
-        else: # recursively construct directory
+        if not os.path.exists(save_path):
             os.makedirs(save_path, exist_ok=True)
 
-        dev_pred_save_path = save_path + '/predicted_labels.txt'
+        dev_pred_save_path = f'{save_path}/predicted_labels.txt'
         with open(dev_pred_save_path, 'w', encoding = 'utf8') as o:
             for text in dev_pred_text_list:
                 o.writelines(text + '\n')
-        dev_reference_save_path = save_path + '/reference_labels.txt'
+        dev_reference_save_path = f'{save_path}/reference_labels.txt'
         with open(dev_reference_save_path, 'w', encoding = 'utf8') as o:
             for text in dev_reference_text_list:
                 o.writelines(text + '\n')

@@ -49,11 +49,19 @@ def get_optimizers(model, args):
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if all(nd not in n for nd in no_decay)
+            ],
             "weight_decay": args.weight_decay,
         },
         {
-            "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if any(nd in n for nd in no_decay)
+            ],
             "weight_decay": 0.0,
         },
     ]
@@ -82,11 +90,11 @@ if __name__ == '__main__':
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+            print(
+                f'Using Multi-GPU training, number of GPU is {torch.cuda.device_count()}'
+            )
         else:
             print ('Using single GPU training.')
-    else:
-        pass
     args = parse_config()
     device = torch.device('cuda')
 
@@ -128,11 +136,7 @@ if __name__ == '__main__':
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training
-        else:
-            pass
         model = model.to(device)
-    else:
-        pass
     print ('Model loaded')
 
     optimizer, _ = get_optimizers(model, args)
@@ -180,17 +184,16 @@ if __name__ == '__main__':
         # **********************************************************************
         # for few-shot learning, we let the model to first train for several epochs
         if args.train_data_ratio <= 0.1:
-            if args.pretrained_path == 'None':
-                if epoch < 10: # first train 10 epoches
-                    continue
-            else:
-                if epoch < 3: # first train 10 epoches
-                    continue
+            if (
+                args.pretrained_path == 'None'
+                and epoch < 10
+                or args.pretrained_path != 'None'
+                and epoch < 3
+            ): # first train 10 epoches
+                continue
         elif args.train_data_ratio == 0.2:
             if epoch < 3: # first train 5 epoches
                 continue
-        else:
-            pass
         # **********************************************************************
         # --- evaluation --- #
         from inference_utlis import batch_generate
@@ -211,27 +214,23 @@ if __name__ == '__main__':
                 one_inference_batch = dev_batch_list[p_dev_idx]
                 dev_batch_parse_dict = batch_generate(model, one_inference_batch, ref_bs, ref_act, ref_db, 
                     input_contain_db, data)
-                for item in dev_batch_parse_dict:
-                    all_dev_result.append(item)
+                all_dev_result.extend(iter(dev_batch_parse_dict))
             p.finish()
             dev_bleu, dev_success, dev_match = evaluator.validation_metric(all_dev_result)
 
             dev_score = 0.5 * (dev_success + dev_match) + dev_bleu
 
             print ('Inform: %2.2f  Success: %2.2f  BLEU: %2.2f    Score: %.2f' % (dev_match, dev_success, dev_bleu, dev_score))
-            one_dev_str = 'dev_e2e_evaluation_inform_{}_success_{}_bleu_{}_combine_score_{}'.format(round(dev_match, 2),
-                round(dev_success,2), round(dev_bleu,2), round(dev_score,2))
+            one_dev_str = f'dev_e2e_evaluation_inform_{round(dev_match, 2)}_success_{round(dev_success, 2)}_bleu_{round(dev_bleu, 2)}_combine_score_{round(dev_score, 2)}'
             if dev_score > max_dev_score:
                 max_dev_str = one_dev_str
                 max_dev_score = dev_score
                 print ('Saving Model...')
-                model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_' + one_dev_str
+                model_save_path = f'{args.ckpt_save_path}/epoch_{str(epoch)}_{one_dev_str}'
                 #model_save_path = args.ckpt_save_path + '/epoch_' + str(epoch) + '_best_ckpt'
 
                 import os
-                if os.path.exists(model_save_path):
-                    pass
-                else: # recursively construct directory
+                if not os.path.exists(model_save_path):
                     os.makedirs(model_save_path, exist_ok=True)
 
                 if cuda_available and torch.cuda.device_count() > 1:
@@ -239,7 +238,7 @@ if __name__ == '__main__':
                 else:
                     model.save_model(model_save_path)
 
-                pkl_save_path = model_save_path + '/' + one_dev_str + '.json'
+                pkl_save_path = f'{model_save_path}/{one_dev_str}.json'
                 with open(pkl_save_path, 'w') as outfile:
                     json.dump(all_dev_result, outfile, indent=4)
                 print ('Validation result saved.')
@@ -248,28 +247,25 @@ if __name__ == '__main__':
                 # only save 1 checkpoints
                 import os
                 from operator import itemgetter
-                fileData = {}
                 test_output_dir = args.ckpt_save_path
-                for fname in os.listdir(test_output_dir):
-                    if fname.startswith('epoch'):
-                        fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
-                    else:
-                        pass
+                fileData = {
+                    fname: os.stat(f'{test_output_dir}/{fname}').st_mtime
+                    for fname in os.listdir(test_output_dir)
+                    if fname.startswith('epoch')
+                }
                 sortedFiles = sorted(fileData.items(), key=itemgetter(1))
                 max_save_num = 1
-                if len(sortedFiles) < max_save_num:
-                    pass
-                else:
+                if len(sortedFiles) >= max_save_num:
                     delete = len(sortedFiles) - max_save_num
-                    for x in range(0, delete):
-                        one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
+                    for x in range(delete):
+                        one_folder_name = f'{test_output_dir}/{sortedFiles[x][0]}'
                         print (one_folder_name)
-                        os.system('rm -r ' + one_folder_name)
+                        os.system(f'rm -r {one_folder_name}')
                 print ('-----------------------------------')
-                # --------------------------------------------------------------------------------------------- #
+                            # --------------------------------------------------------------------------------------------- #
 
-            print ('Current Result: ' + one_dev_str)
-            print ('Best Result: ' + max_dev_str)
+            print(f'Current Result: {one_dev_str}')
+            print(f'Best Result: {max_dev_str}')
             print ('dev evaluation finished.')
         print ('-----------------------------------------')
         model.train()

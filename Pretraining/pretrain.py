@@ -54,19 +54,20 @@ if __name__ == '__main__':
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+            print(
+                f'Using Multi-GPU training, number of GPU is {torch.cuda.device_count()}'
+            )
         else:
             print ('Using single GPU training.')
-    else:
-        pass
- 
     args = parse_config()
     device = torch.device('cuda')
-    
+
     print ('Start loading data...')
     assert args.model_name.startswith('t5')
     from transformers import T5Tokenizer
-    preprocessed_tokenizer_path = args.dataset_prefix_path + r'/tokenizer_with_special_token/'
+    preprocessed_tokenizer_path = (
+        f'{args.dataset_prefix_path}/tokenizer_with_special_token/'
+    )
     tokenizer = T5Tokenizer.from_pretrained(preprocessed_tokenizer_path)
 
     from dataclass import TOD_PRETRAINING_CORPUS
@@ -80,11 +81,7 @@ if __name__ == '__main__':
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training
-        else:
-            pass
         model = model.to(device)
-    else:
-        pass
     print ('Model loaded')
 
     # organize optimizer
@@ -93,10 +90,21 @@ if __name__ == '__main__':
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if all(nd not in n for nd in no_decay)
+            ],
             "weight_decay": args.weight_decay,
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        {
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if any(nd in n for nd in no_decay)
+            ],
+            "weight_decay": 0.0,
+        },
     ]
 
     from transformers.optimization import AdamW, get_linear_schedule_with_warmup
@@ -142,18 +150,18 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 global_step += 1
                 if global_step == actual_total_steps+1:
-                    print ('Pretraining completed at steps {}'.format(global_step))
+                    print(f'Pretraining completed at steps {global_step}')
                     break
 
             if global_step > 0 and global_step % args.save_steps == 0:
                 print ('-----------------------------------------')
-                print ('Start evaluation at global update step {}'.format(global_step))
+                print(f'Start evaluation at global update step {global_step}')
                 model.eval()
                 with torch.no_grad():
                     dev_batch_list = data.get_batches(args.number_of_gpu * args.batch_size_per_gpu, mode='dev')
                     dev_batch_num_per_epoch = len(dev_batch_list)
                     dev_p = progressbar.ProgressBar(dev_batch_num_per_epoch)
-                    print ('Number of evaluation batches is {}'.format(dev_batch_num_per_epoch))
+                    print(f'Number of evaluation batches is {dev_batch_num_per_epoch}')
                     dev_p.start()
                     dev_loss = 0.
                     for p_dev_idx in range(dev_batch_num_per_epoch):
@@ -172,16 +180,16 @@ if __name__ == '__main__':
                         one_dev_loss = one_dev_loss.mean()
                         dev_loss += one_dev_loss.item()
                     dev_loss /= dev_batch_num_per_epoch
-                    print ('current dev loss is {}, minimum dev loss is {}'.format(round(dev_loss,2), round(best_dev_loss,2)))
+                    print(
+                        f'current dev loss is {round(dev_loss, 2)}, minimum dev loss is {round(best_dev_loss, 2)}'
+                    )
                     if dev_loss < best_dev_loss:
                         # saving the model with the lowest validation perplexity
                         print ('Saving model...')
                         model_save_path = args.save_path + args.save_ckpt_name
 
                         import os
-                        if os.path.exists(model_save_path):
-                            pass
-                        else: # recursively construct directory
+                        if not os.path.exists(model_save_path):
                             os.makedirs(model_save_path, exist_ok=True)
 
                         if multi_gpu_training:
@@ -195,25 +203,24 @@ if __name__ == '__main__':
                         # only save 1 checkpoints
                         import os
                         from operator import itemgetter
-                        fileData = {}
                         test_output_dir = args.save_path
-                        for fname in os.listdir(test_output_dir):
-                            if fname.startswith(args.save_ckpt_name):
-                                fileData[fname] = os.stat(test_output_dir + '/' + fname).st_mtime
-                            else:
-                                pass
+                        fileData = {
+                            fname: os.stat(
+                                f'{test_output_dir}/{fname}'
+                            ).st_mtime
+                            for fname in os.listdir(test_output_dir)
+                            if fname.startswith(args.save_ckpt_name)
+                        }
                         sortedFiles = sorted(fileData.items(), key=itemgetter(1))
                         max_save_num = 1
-                        if len(sortedFiles) < max_save_num:
-                            pass
-                        else:
+                        if len(sortedFiles) >= max_save_num:
                             delete = len(sortedFiles) - max_save_num
-                            for x in range(0, delete):
-                                one_folder_name = test_output_dir + '/' + sortedFiles[x][0]
+                            for x in range(delete):
+                                one_folder_name = f'{test_output_dir}/{sortedFiles[x][0]}'
                                 print (one_folder_name)
-                                os.system('rm -r ' + one_folder_name)
+                                os.system(f'rm -r {one_folder_name}')
                         print ('-----------------------------------')
-                        # --------------------------------------------------------------------------------------------- #
+                                            # --------------------------------------------------------------------------------------------- #
                     best_dev_loss = min(dev_loss, best_dev_loss)
                     global_step += 1
                 model.train()
@@ -222,5 +229,7 @@ if __name__ == '__main__':
                 print ('-----------------------------------------')
         p.finish()
         train_loss = train_loss / train_batch_num_per_epoch
-        print ('At epoch {}, total update steps is {}, the total training loss is {}'.format(epoch, global_step, train_loss))
+        print(
+            f'At epoch {epoch}, total update steps is {global_step}, the total training loss is {train_loss}'
+        )
         print ('++++++++++++++++++++++++++++++++++++++++++')

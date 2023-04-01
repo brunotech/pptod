@@ -2,8 +2,8 @@ def parse_one_instance(text, tokenizer):
     item_list = text.strip('\n').split('\t')
     assert len(item_list) == 2
     text, label = item_list
-    text = sos_u_token + ' ' + text + ' ' + eos_u_token
-    label = sos_d_token + ' ' + label + ' ' + eos_d_token
+    text = f'{sos_u_token} {text} {eos_u_token}'
+    label = f'{sos_d_token} {label} {eos_d_token}'
     text_id = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(text))
     label_id = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(label))
     return text, text_id, label, label_id
@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
 
     save_path = r'../tokenized_pretraining_corpora/'
-    tokenizer_path = save_path + r'/tokenizer_with_special_token'
+    tokenizer_path = f'{save_path}/tokenizer_with_special_token'
     print ('Loading tokenizer...')
     from transformers import T5Tokenizer
     tokenizer = T5Tokenizer.from_pretrained(tokenizer_path)
@@ -38,11 +38,11 @@ if __name__ == '__main__':
 
     print ('Processing Intent Classification Datasets...')
     in_f = r'../separate_datasets/Intent_Classification/train_intent_classification_data.txt'
-    out_f = save_path + r'/train_intent_classification.json'
+    out_f = f'{save_path}/train_intent_classification.json'
     process_file(in_f, tokenizer, out_f)
 
     in_f = r'../separate_datasets/Intent_Classification/test_intent_classification_data.txt'
-    out_f = save_path + r'/test_intent_classification.json'
+    out_f = f'{save_path}/test_intent_classification.json'
     process_file(in_f, tokenizer, out_f)
     print ('Processing Intent Classification Datasets Finished!')
 

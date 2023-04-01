@@ -59,12 +59,11 @@ if __name__ == '__main__':
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+            print(
+                f'Using Multi-GPU training, number of GPU is {torch.cuda.device_count()}'
+            )
         else:
             print ('Using single GPU training.')
-    else:
-        pass
- 
     args = parse_config()
     device = torch.device('cuda')
 
@@ -77,7 +76,7 @@ if __name__ == '__main__':
 
     if args.pretrained_path != 'None':
         ckpt_name = get_checkpoint_name(args.pretrained_path)
-        pretrained_path = args.pretrained_path + '/' + ckpt_name
+        pretrained_path = f'{args.pretrained_path}/{ckpt_name}'
 
     if args.pretrained_path != 'None':
         print ('Loading Pretrained Tokenizer...')
@@ -126,11 +125,7 @@ if __name__ == '__main__':
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training
-        else:
-            pass
         model = model.to(device)
-    else:
-        pass
     model.eval()
     print ('Model loaded')
 
@@ -149,21 +144,18 @@ if __name__ == '__main__':
             p.update(p_dev_idx)
             one_inference_batch = dev_batch_list[p_dev_idx]
             dev_batch_parse_dict = e2e_batch_generate(model, one_inference_batch, input_contain_db, data)
-            for item in dev_batch_parse_dict:
-                all_dev_result.append(item)
+            all_dev_result.extend(iter(dev_batch_parse_dict))
         p.finish()
         dev_bleu, dev_success, dev_match = evaluator.validation_metric(all_dev_result)
         dev_score = 0.5 * (dev_success + dev_match) + dev_bleu
-        print ('The evaluation results are: Inform: {}, Success: {}, BLEU: {}, Combined Score: {}'.format(dev_match, 
-            dev_success, dev_bleu, dev_score))
-        one_dev_str = 'inference_result_e2e_evaluation_inform_{}_success_{}_bleu_{}_combine_score_{}'.format(round(dev_match, 2),
-                round(dev_success,2), round(dev_bleu,2), round(dev_score,2))
+        print(
+            f'The evaluation results are: Inform: {dev_match}, Success: {dev_success}, BLEU: {dev_bleu}, Combined Score: {dev_score}'
+        )
+        one_dev_str = f'inference_result_e2e_evaluation_inform_{round(dev_match, 2)}_success_{round(dev_success, 2)}_bleu_{round(dev_bleu, 2)}_combine_score_{round(dev_score, 2)}'
 
-        output_save_path = args.output_save_path + '/' + one_dev_str + '.json'
+        output_save_path = f'{args.output_save_path}/{one_dev_str}.json'
         import os
-        if os.path.exists(args.output_save_path):
-            pass
-        else: # recursively construct directory
+        if not os.path.exists(args.output_save_path):
             os.makedirs(args.output_save_path, exist_ok=True)
 
         import json

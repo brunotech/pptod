@@ -55,12 +55,11 @@ if __name__ == '__main__':
     if cuda_available:
         if torch.cuda.device_count() > 1:
             multi_gpu_training = True
-            print ('Using Multi-GPU training, number of GPU is {}'.format(torch.cuda.device_count()))
+            print(
+                f'Using Multi-GPU training, number of GPU is {torch.cuda.device_count()}'
+            )
         else:
             print ('Using single GPU training.')
-    else:
-        pass
- 
     args = parse_config()
     device = torch.device('cuda')
 
@@ -68,7 +67,7 @@ if __name__ == '__main__':
     assert args.model_name.startswith('t5')
 
     ckpt_name = get_checkpoint_name(args.pretrained_path)
-    pretrained_path = args.pretrained_path + '/' + ckpt_name
+    pretrained_path = f'{args.pretrained_path}/{ckpt_name}'
 
     from transformers import T5Tokenizer
     print ('Loading Pretrained Tokenizer...')
@@ -102,11 +101,7 @@ if __name__ == '__main__':
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training
-        else:
-            pass
         model = model.to(device)
-    else:
-        pass
     model.eval()
     print ('Model loaded')
 
@@ -127,21 +122,18 @@ if __name__ == '__main__':
             p.update(p_dev_idx)
             one_inference_batch = dev_batch_list[p_dev_idx]
             dev_batch_parse_dict = batch_generate(model, one_inference_batch, data)
-            for item in dev_batch_parse_dict:
-                all_dev_result.append(item)
+            all_dev_result.extend(iter(dev_batch_parse_dict))
         p.finish()
 
         from compute_joint_acc import compute_jacc
         all_dev_result = zip_result(all_dev_result)
         dev_score = compute_jacc(data=all_dev_result) * 100
-        one_dev_str = 'test_joint_accuracy_{}'.format(round(dev_score,2))
+        one_dev_str = f'test_joint_accuracy_{round(dev_score, 2)}'
 
-        print ('Test Accuracy is {}'.format(dev_score))
-        output_save_path = args.output_save_path + '/' + one_dev_str + '.json'
+        print(f'Test Accuracy is {dev_score}')
+        output_save_path = f'{args.output_save_path}/{one_dev_str}.json'
         import os
-        if os.path.exists(args.output_save_path):
-            pass
-        else: # recursively construct directory
+        if not os.path.exists(args.output_save_path):
             os.makedirs(args.output_save_path, exist_ok=True)
 
         import json

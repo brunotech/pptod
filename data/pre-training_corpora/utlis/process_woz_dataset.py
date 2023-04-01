@@ -15,8 +15,8 @@ def update_belief_state(usr_dict, prev_bs_dict, prev_bs_name_list):
         res_dx_text = '[restaurant] '
         for name in res_bs_name_list:
             value = res_bs_dict[name]
-            res_text += name + ' ' + value + ' '
-            res_dx_text += name + ' '
+            res_text += f'{name} {value} '
+            res_dx_text += f'{name} '
         res_text = res_text.strip().strip(' , ').strip()
         res_dx_text = res_dx_text.strip().strip(' , ').strip()
     return res_text, res_dx_text, res_bs_dict, res_bs_name_list
@@ -26,12 +26,10 @@ def zip_sess_list(sess_list):
     assert sess_list[0]["system_transcript"] == ''
     if turn_num == 1:
         raise Exception()
-    turn_list = []
-    for idx in range(turn_num - 1):
-        curr_turn_dict = sess_list[idx]
-        system_uttr = sess_list[idx+1]['system_transcript']
-        turn_list.append((curr_turn_dict, system_uttr))
-    return turn_list
+    return [
+        (sess_list[idx], sess_list[idx + 1]['system_transcript'])
+        for idx in range(turn_num - 1)
+    ]
 
 def process_session(sess_list):
     turn_num = len(sess_list)
@@ -44,14 +42,16 @@ def process_session(sess_list):
         one_usr_uttr = one_usr_dict['transcript']
         one_usr_bs, one_usr_bsdx, bs_dict, bs_name_list = \
         update_belief_state(one_usr_dict, bs_dict, bs_name_list)
-        
-        one_turn_dict = {'turn_num':idx}
-        one_turn_dict['user'] = one_usr_uttr
-        one_turn_dict['resp'] = one_system_uttr
-        one_turn_dict['turn_domain'] = ['[restaurant]']
-        one_turn_dict['bspn'] = one_usr_bs
-        one_turn_dict['bsdx'] = one_usr_bsdx
-        one_turn_dict['aspn'] = ''
+
+        one_turn_dict = {
+            'turn_num': idx,
+            'user': one_usr_uttr,
+            'resp': one_system_uttr,
+            'turn_domain': ['[restaurant]'],
+            'bspn': one_usr_bs,
+            'bsdx': one_usr_bsdx,
+            'aspn': '',
+        }
         res_dict['dialogue_session'].append(one_turn_dict)
     return res_dict
 
@@ -84,17 +84,15 @@ if __name__ == '__main__':
 
     import os
     save_path = r'../separate_datasets/WOZ/'
-    if os.path.exists(save_path):
-        pass
-    else: # recursively construct directory
+    if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
     import json
-    out_f = save_path + r'/woz_train.json'
+    out_f = f'{save_path}/woz_train.json'
     with open(out_f, 'w') as outfile:
         json.dump(all_data_list, outfile, indent=4)
 
-    out_f = save_path + r'/woz_test.json'
+    out_f = f'{save_path}/woz_test.json'
     with open(out_f, 'w') as outfile:
         json.dump(dev_list, outfile, indent=4)
 

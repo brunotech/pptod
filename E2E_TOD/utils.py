@@ -17,8 +17,7 @@ def f1_score(label_list, pred_list):
     fn = max(0, len(label_list) - tp)
     precision = tp / (tp + fp + 1e-10)
     recall = tp / (tp + fn + 1e-10)
-    f1 = 2 * precision * recall / (precision + recall + 1e-10)
-    return f1
+    return 2 * precision * recall / (precision + recall + 1e-10)
 
 class Vocab(object):
     def __init__(self, vocab_size=0):
@@ -54,13 +53,14 @@ class Vocab(object):
         l = sorted(self._freq_dict.keys(), key=lambda x: -self._freq_dict[x])
         print('Vocabulary size including oov: %d' % (len(l) + len(self._idx2word)))
         if len(l) + len(self._idx2word) < self.vocab_size:
-            logging.warning('actual label set smaller than that configured: {}/{}'
-                            .format(len(l) + len(self._idx2word), self.vocab_size))
+            logging.warning(
+                f'actual label set smaller than that configured: {len(l) + len(self._idx2word)}/{self.vocab_size}'
+            )
         for word in ontology.all_domains + ['general']:
-            word = '[' + word + ']'
+            word = f'[{word}]'
             self._add_to_vocab(word)
         for word in ontology.all_acts:
-            word = '[' + word + ']'
+            word = f'[{word}]'
             self._add_to_vocab(word)
         for word in ontology.all_slots:
             self._add_to_vocab(word)
@@ -72,29 +72,29 @@ class Vocab(object):
         self.vocab_size_oov = len(self._idx2word)
 
     def load_vocab(self, vocab_path):
-        self._freq_dict = json.loads(open(vocab_path+'.freq.json', 'r').read())
-        self._word2idx = json.loads(open(vocab_path+'.word2idx.json', 'r').read())
+        self._freq_dict = json.loads(open(f'{vocab_path}.freq.json', 'r').read())
+        self._word2idx = json.loads(open(f'{vocab_path}.word2idx.json', 'r').read())
         self._idx2word = {}
         for w, idx in self._word2idx.items():
             self._idx2word[idx] = w
         self.vocab_size_oov = len(self._idx2word)
-        print('vocab file loaded from "'+vocab_path+'"')
+        print(f'vocab file loaded from "{vocab_path}"')
         print('Vocabulary size including oov: %d' % (self.vocab_size_oov))
 
     def save_vocab(self, vocab_path):
         _freq_dict = OrderedDict(sorted(self._freq_dict.items(), key=lambda kv:kv[1], reverse=True))
-        write_dict(vocab_path+'.word2idx.json', self._word2idx)
-        write_dict(vocab_path+'.freq.json', _freq_dict)
+        write_dict(f'{vocab_path}.word2idx.json', self._word2idx)
+        write_dict(f'{vocab_path}.freq.json', _freq_dict)
 
 
     def encode(self, word, include_oov=True):
         if include_oov:
             if self._word2idx.get(word, None) is None:
-                raise ValueError('Unknown word: %s. Vocabulary should include oovs here.'%word)
-            return self._word2idx[word]
+                raise ValueError(f'Unknown word: {word}. Vocabulary should include oovs here.')
         else:
             word = '<unk>' if word not in self._word2idx else word
-            return self._word2idx[word]
+
+        return self._word2idx[word]
 
     def sentence_encode(self, word_list):
         return [self.encode(_) for _ in word_list]
@@ -112,15 +112,14 @@ class Vocab(object):
         if not indicate_oov or idx<self.vocab_size:
             return self._idx2word[idx]
         else:
-            return self._idx2word[idx]+'(o)'
+            return f'{self._idx2word[idx]}(o)'
 
     def sentence_decode(self, index_list, eos=None, indicate_oov=False):
         l = [self.decode(_, indicate_oov) for _ in index_list]
         if not eos or eos not in l:
             return ' '.join(l)
-        else:
-            idx = l.index(eos)
-            return ' '.join(l[:idx])
+        idx = l.index(eos)
+        return ' '.join(l[:idx])
 
     def nl_decode(self, l, eos=None):
         return [self.sentence_decode(_, eos) + '\n' for _ in l]
@@ -133,11 +132,7 @@ def padSeqs_gpt(sequences, pad_id, maxlen=None):
     num_samples = len(sequences)
     seq_mexlen = np.max(lengths)
 
-    if seq_mexlen > 1024: 
-        maxlen = 1024
-    else:
-        maxlen = seq_mexlen
-    
+    maxlen = min(seq_mexlen, 1024)
     x = (np.ones((num_samples, maxlen)) * pad_id)
     for idx, s in enumerate(sequences):
         if not len(s):
@@ -148,7 +143,7 @@ def padSeqs_gpt(sequences, pad_id, maxlen=None):
 
         # pad method = 'post'
         x[idx, :len(trunc)] = trunc
-            
+
     return x, lengths
 
 def padSeqs(sequences, maxlen=None, truncated = False, pad_method='post',
@@ -158,72 +153,71 @@ def padSeqs(sequences, maxlen=None, truncated = False, pad_method='post',
     lengths = []
     for x in sequences:
         if not hasattr(x, '__len__'):
-            raise ValueError('`sequences` must be a list of iterables. '
-                             'Found non-iterable: ' + str(x))
+            raise ValueError(
+                f'`sequences` must be a list of iterables. Found non-iterable: {str(x)}'
+            )
         lengths.append(len(x))
 
     num_samples = len(sequences)
     seq_maxlen = np.max(lengths)
 
-    if maxlen is not None and truncated:
-        maxlen = min(seq_maxlen, maxlen)
-    else:
-        maxlen = seq_maxlen
-    sample_shape = tuple()
-    for s in sequences:
-        if len(s) > 0:
-            sample_shape = np.asarray(s).shape[1:]
-            break
-
+    maxlen = (
+        min(seq_maxlen, maxlen)
+        if maxlen is not None and truncated
+        else seq_maxlen
+    )
+    sample_shape = next(
+        (np.asarray(s).shape[1:] for s in sequences if len(s) > 0), tuple()
+    )
     x = (np.ones((num_samples, maxlen) + sample_shape) * value).astype(dtype)
     for idx, s in enumerate(sequences):
         if not len(s):
             print('empty list/array was found')
-            continue 
+            continue
         if trunc_method == 'pre':
             trunc = s[-maxlen:]
         elif trunc_method == 'post':
             trunc = s[:maxlen]
         else:
-            raise ValueError('Truncating type "%s" not understood' % trunc_method)
+            raise ValueError(f'Truncating type "{trunc_method}" not understood')
 
         trunc = np.asarray(trunc, dtype=dtype)
         if trunc.shape[1:] != sample_shape:
-            raise ValueError('Shape of sample %s of sequence at position %s is different from expected shape %s' %
-                             (trunc.shape[1:], idx, sample_shape))
+            raise ValueError(
+                f'Shape of sample {trunc.shape[1:]} of sequence at position {idx} is different from expected shape {sample_shape}'
+            )
 
         if pad_method == 'post':
             x[idx, :len(trunc)] = trunc
         elif pad_method == 'pre':
             x[idx, -len(trunc):] = trunc
         else:
-            raise ValueError('Padding type "%s" not understood' % pad_method)
+            raise ValueError(f'Padding type "{pad_method}" not understood')
     return x
 
 def get_glove_matrix(glove_path, vocab, initial_embedding_np):
-    ef = open(glove_path, 'r', encoding='UTF-8')
-    cnt = 0
-    vec_array = initial_embedding_np
-    old_avg = np.average(vec_array)
-    old_std = np.std(vec_array)
-    vec_array = vec_array.astype(np.float32)
-    new_avg, new_std = 0, 0
+    with open(glove_path, 'r', encoding='UTF-8') as ef:
+        cnt = 0
+        vec_array = initial_embedding_np
+        old_avg = np.average(vec_array)
+        old_std = np.std(vec_array)
+        vec_array = vec_array.astype(np.float32)
+        new_avg, new_std = 0, 0
 
-    for line in ef.readlines():
-        line = line.strip().split(' ')
-        word, vec = line[0], line[1:]
-        vec = np.array(vec, np.float32)
-        if not vocab.has_word(word):
-            continue
-        word_idx = vocab.encode(word)
-        if word_idx <vocab.vocab_size:
-            cnt += 1
-            vec_array[word_idx] = vec
-            new_avg += np.average(vec)
-            new_std += np.std(vec)
-    new_avg /= cnt
-    new_std /= cnt
-    ef.close()
+        for line in ef:
+            line = line.strip().split(' ')
+            word, vec = line[0], line[1:]
+            vec = np.array(vec, np.float32)
+            if not vocab.has_word(word):
+                continue
+            word_idx = vocab.encode(word)
+            if word_idx <vocab.vocab_size:
+                cnt += 1
+                vec_array[word_idx] = vec
+                new_avg += np.average(vec)
+                new_std += np.std(vec)
+        new_avg /= cnt
+        new_std /= cnt
     logging.info('%d known embedding. old mean: %f new mean %f, old std %f new std %f' % (cnt, old_avg, new_avg, old_std, new_std))
     return vec_array
 

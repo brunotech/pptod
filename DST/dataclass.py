@@ -52,7 +52,7 @@ class DSTMultiWozData:
 
         self.bos_token = self.tokenizer.convert_ids_to_tokens([self.bos_token_id])[0]
         self.eos_token = self.tokenizer.convert_ids_to_tokens([self.eos_token_id])[0]
-        print ('bos token is {}, eos token is {}'.format(self.bos_token, self.eos_token))
+        print(f'bos token is {self.bos_token}, eos token is {self.eos_token}')
 
         self.all_sos_token_id_list = []
         for token in all_sos_token_list:
@@ -75,7 +75,7 @@ class DSTMultiWozData:
 
         import json
         if data_mode == 'train':
-            train_json_path = data_path_prefix + '/multiwoz-fine-processed-train.json'
+            train_json_path = f'{data_path_prefix}/multiwoz-fine-processed-train.json'
             with open(train_json_path) as f:
                 train_raw_data = json.load(f)
 
@@ -88,7 +88,7 @@ class DSTMultiWozData:
                 random.shuffle(train_raw_data)
                 # randomly select a subset of training data
                 train_raw_data = train_raw_data[:few_shot_num]
-                print ('Number of training sessions is {}'.format(few_shot_num))
+                print(f'Number of training sessions is {few_shot_num}')
 
             print ('Tokenizing raw train data...')
             train_data_id_list = self.tokenize_raw_data(train_raw_data)
@@ -104,20 +104,20 @@ class DSTMultiWozData:
                     self.train_dial_id_list.append(one_item_id)
                     self.train_id2session_dict[one_item_id] = [item]
             assert len(self.train_dial_id_list) == len(self.train_id2session_dict)
-            self.train_num = len(self.train_data_list) 
+            self.train_num = len(self.train_data_list)
         elif data_mode == 'test':
             train_raw_data = []
         else:
             raise Exception('Wrong Data Mode!!!')
 
-        dev_json_path = data_path_prefix + '/multiwoz-fine-processed-dev.json'
+        dev_json_path = f'{data_path_prefix}/multiwoz-fine-processed-dev.json'
         with open(dev_json_path) as f:
             dev_raw_data = json.load(f)
         print ('Tokenizing raw dev data...')
         dev_data_id_list = self.tokenize_raw_data(dev_raw_data)
         self.dev_data_list = self.flatten_data(dev_data_id_list)
 
-        test_json_path = data_path_prefix + '/multiwoz-fine-processed-test.json'
+        test_json_path = f'{data_path_prefix}/multiwoz-fine-processed-test.json'
         with open(test_json_path) as f:
             test_raw_data = json.load(f)
         print ('Tokenizing raw test data...')
@@ -125,18 +125,18 @@ class DSTMultiWozData:
         self.test_data_list = self.flatten_data(test_data_id_list)
 
         print ('The size of raw train, dev and test sets are %d, %d and %d' % \
-            (len(train_raw_data), len(dev_raw_data), len(test_raw_data)))
+                (len(train_raw_data), len(dev_raw_data), len(test_raw_data)))
 
         self.dev_num, self.test_num = len(self.dev_data_list), len(self.test_data_list)
         if data_mode == 'train':
             print ('train turn number is %d, dev turn number is %d, test turn number is %d' % \
-                (len(self.train_data_list), len(self.dev_data_list), len(self.test_data_list)))
+                    (len(self.train_data_list), len(self.dev_data_list), len(self.test_data_list)))
             self.shuffle_mode = shuffle_mode
             self.ordering_train_data()
-        else:
-            pass
 
     def ordering_train_data(self):
+        if self.shuffle_mode == 'unshuffle':
+            return
         if self.shuffle_mode == 'shuffle_turn_level':
             random.shuffle(self.train_data_list)
         elif self.shuffle_mode == 'shuffle_session_level':
@@ -144,12 +144,9 @@ class DSTMultiWozData:
             random.shuffle(self.train_dial_id_list)
             for dial_id in self.train_dial_id_list:
                 one_session_list = self.train_id2session_dict[dial_id]
-                for one_turn in one_session_list:
-                    train_data_list.append(one_turn)
+                train_data_list.extend(iter(one_session_list))
             assert len(train_data_list) == len(self.train_data_list)
             self.train_data_list = train_data_list
-        elif self.shuffle_mode == 'unshuffle':
-            pass
         else:
             raise Exception('Wrong Train Ordering Mode!!!')
 
@@ -206,16 +203,16 @@ class DSTMultiWozData:
         for token in pred_tokens:
             if token in self.special_token_list + ['<s>', '</s>', '<pad>']:
                 if len(curr_list) == 0:
-                    res_text += ' ' + token + ' '
+                    res_text += f' {token} '
                 else:
                     curr_res = self.tokenizer.convert_tokens_to_string(curr_list)
-                    res_text = res_text + ' ' + curr_res + ' ' + token + ' '
+                    res_text = f'{res_text} {curr_res} {token} '
                     curr_list = []
             else:
                 curr_list.append(token)
         if len(curr_list) > 0:
             curr_res = self.tokenizer.convert_tokens_to_string(curr_list)
-            res_text = res_text + ' ' + curr_res + ' '
+            res_text = f'{res_text} {curr_res} '
         res_text_list = res_text.strip().split()
         res_text = ' '.join(res_text_list).strip()
         return res_text
@@ -281,19 +278,22 @@ class DSTMultiWozData:
                 bs_input = self.bs_prefix_id + [self.sos_context_token_id] + bs_input[-900:] + [self.eos_context_token_id]
                 bs_output = curr_bspn
 
-                data_list.append({'dial_id': one_dial_id,
-                    'turn_num': turn_id,
-                    'prev_context':previous_context,
-                    'user': curr_turn['user'],
-                    'usdx': curr_turn['usdx'],
-                    'resp': curr_sys_resp,
-                    'bspn': curr_turn['bspn'],
-                    'bspn_reform': curr_turn['bspn_reform'],
-                    'bsdx': curr_turn['bsdx'],
-                    'bsdx_reform': curr_turn['bsdx_reform'],
-                    'bs_input': bs_input,
-                    'bs_output': bs_output
-                    })
+                data_list.append(
+                    {
+                        'dial_id': one_dial_id,
+                        'turn_num': turn_id,
+                        'prev_context': previous_context,
+                        'user': curr_turn['user'],
+                        'usdx': curr_turn['usdx'],
+                        'resp': curr_sys_resp,
+                        'bspn': bs_output,
+                        'bspn_reform': curr_turn['bspn_reform'],
+                        'bsdx': curr_turn['bsdx'],
+                        'bsdx_reform': curr_turn['bsdx_reform'],
+                        'bs_input': bs_input,
+                        'bs_output': bs_output,
+                    }
+                )
                 # update context for next turn
                 previous_context = previous_context + curr_user_input + curr_sys_resp
         return data_list
@@ -315,14 +315,10 @@ class DSTMultiWozData:
 
         all_input_data_list, all_output_data_list = [], []
         for item in all_data_list:
-            one_input_data_list = []
-            for key in ['bs_input']:
-                one_input_data_list.append(item[key])
+            one_input_data_list = [item[key] for key in ['bs_input']]
             all_input_data_list.extend(one_input_data_list)
 
-            one_output_data_list = []
-            for key in ['bs_output']:
-                one_output_data_list.append(item[key])
+            one_output_data_list = [item[key] for key in ['bs_output']]
             all_output_data_list.extend(one_output_data_list)
 
         data_num = len(all_input_data_list)
@@ -339,15 +335,12 @@ class DSTMultiWozData:
                 one_output_batch_list.append(all_output_data_list[idx])
             one_batch = [one_input_batch_list, one_output_batch_list]
             batch_list.append(one_batch)
-        out_str = 'Overall Number of datapoints is ' + str(data_num) + \
-        ' Number of ' + mode + ' batches is ' + str(len(batch_list))
+        out_str = f'Overall Number of datapoints is {data_num} Number of {mode} batches is {len(batch_list)}'
         print (out_str)
         return batch_list
 
     def build_iterator(self, batch_size, mode):
-        batch_list = self.get_batches(batch_size, mode)
-        for i, batch in enumerate(batch_list):
-            yield batch
+        yield from self.get_batches(batch_size, mode)
 
     def pad_batch(self, batch_id_list):
         batch_id_list = [torch.LongTensor(item) for item in batch_id_list]
@@ -372,12 +365,14 @@ class DSTMultiWozData:
 
     def remove_sos_eos_token(self, text):
         token_list = text.split()
-        res_list = []
-        for token in token_list:
-            if token == '<_PAD_>' or token.startswith('<eos_') or token.startswith('<sos_') or token in [self.bos_token, self.eos_token]:
-                continue
-            else:
-                res_list.append(token)
+        res_list = [
+            token
+            for token in token_list
+            if token != '<_PAD_>'
+            and not token.startswith('<eos_')
+            and not token.startswith('<sos_')
+            and token not in [self.bos_token, self.eos_token]
+        ]
         return ' '.join(res_list).strip()
 
     def parse_id_to_text(self, id_list):
@@ -400,10 +395,11 @@ class DSTMultiWozData:
             input_contain_db: whether input contain db result
             ref_db: if input contain db, whether using the reference db result
         '''
-        res_dict = {}
-        res_dict['dial_id'] = one_instance['dial_id']
-        res_dict['turn_num'] = one_instance['turn_num']
-        res_dict['user'] = self.parse_id_to_text(one_instance['user'])
+        res_dict = {
+            'dial_id': one_instance['dial_id'],
+            'turn_num': one_instance['turn_num'],
+            'user': self.parse_id_to_text(one_instance['user']),
+        }
         res_dict['bspn'] = self.parse_id_to_text(one_instance['bspn'])
         res_dict['bsdx'] = self.parse_id_to_text(one_instance['bsdx'])
         res_dict['bspn_reform'] = self.parse_id_to_text(one_instance['bspn_reform'])
@@ -426,12 +422,9 @@ class DSTMultiWozData:
             if start_idx > data_num - 1:
                 break
             end_idx = min(end_idx, data_num - 1)
-            one_batch_list = []
-            for idx in range(start_idx, end_idx):
-                one_batch_list.append(all_data_list[idx])
-            if len(one_batch_list) == 0: 
-                pass
-            else:
+            if one_batch_list := [
+                all_data_list[idx] for idx in range(start_idx, end_idx)
+            ]:
                 batch_list.append(one_batch_list)
         return batch_list
 

@@ -37,18 +37,27 @@ class T5Gen_Model(nn.Module):
     def forward(self, src_input, src_mask, tgt_input, tgt_output):
         src_mask = src_mask.type(src_input.type())
         outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=tgt_input, labels=tgt_output)
-        loss = outputs[0]#.mean()
-        return loss
+        return outputs[0]
 
     def parse_batch_text(self, batch_pred_ids):
         res_text_list = []
         for predicted_ids in batch_pred_ids:
-            one_pred_ids = []
-            for one_id in predicted_ids:
-                if one_id in [self.pad_token_id, self.sos_b_token_id, self.eos_b_token_id, self.sos_a_token_id, self.eos_a_token_id, self.sos_r_token_id, self.eos_r_token_id, self.sos_d_token_id, self.eos_d_token_id]:
-                    pass
-                else:
-                    one_pred_ids.append(one_id)
+            one_pred_ids = [
+                one_id
+                for one_id in predicted_ids
+                if one_id
+                not in [
+                    self.pad_token_id,
+                    self.sos_b_token_id,
+                    self.eos_b_token_id,
+                    self.sos_a_token_id,
+                    self.eos_a_token_id,
+                    self.sos_r_token_id,
+                    self.eos_r_token_id,
+                    self.sos_d_token_id,
+                    self.eos_d_token_id,
+                ]
+            ]
             one_res_text = self.tokenizer.decode(one_pred_ids)
             res_text_list.append(one_res_text)
         return res_text_list

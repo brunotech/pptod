@@ -23,9 +23,7 @@ import re
 def restore_text(text, mode):
     if mode == 'bs':
         text = re.sub(' is ', ' ', text)
-    elif mode == 'da':
-        pass
-    else:
+    elif mode != 'da':
         raise Exception('Wrong Restore Mode!!!')
     text = re.sub(' , ', ' ', text)
     text = ' '.join(text.split()).strip()
@@ -47,8 +45,6 @@ def batch_generate(model, one_inference_batch, data):
         device = torch.device('cuda')
         if torch.cuda.device_count() > 1: # multi-gpu training 
             model = model.module
-        else: # single gpu training
-            pass
     else:
         device = 0
 

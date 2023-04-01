@@ -17,9 +17,7 @@ from operator import itemgetter
 def restore_text(text, mode):
     if mode == 'bs':
         text = re.sub(' is ', ' ', text)
-    elif mode == 'da':
-        pass
-    else:
+    elif mode != 'da':
         raise Exception('Wrong Restore Mode!!!')
     text = re.sub(' , ', ' ', text)
     text = ' '.join(text.split()).strip()
@@ -32,8 +30,6 @@ def e2e_batch_generate(model, one_inference_batch, input_contain_db, data):
         device = torch.device('cuda')
         if torch.cuda.device_count() > 1: # multi-gpu training 
             model = model.module
-        else: # single gpu training
-            pass
     else:
         device = 0
 
@@ -59,20 +55,17 @@ def e2e_batch_generate(model, one_inference_batch, input_contain_db, data):
         one_bs_text = batch_bs_text[idx]
         res_batch_parse_dict[idx]['bspn_gen'] = one_bs_text
 
+    # we need to query the db base
+    batch_db_input_id_list = []
     if input_contain_db:
-        # we need to query the db base
-        batch_db_input_id_list = []
         for idx in range(batch_size):
             one_queried_db_result = \
             data.reader.bspan_to_DBpointer(batch_bs_text[idx], res_batch_parse_dict[idx]['turn_domain'])
-            one_db_text = '<sos_db> ' + one_queried_db_result + ' <eos_db>' 
+            one_db_text = f'<sos_db> {one_queried_db_result} <eos_db>'
             one_db_token_id_input = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(one_db_text))
             batch_db_input_id_list.append(one_db_token_id_input)
     else:
-        batch_db_input_id_list = []
-        for _ in range(batch_size):
-            batch_db_input_id_list.append([])
-
+        batch_db_input_id_list.extend([] for _ in range(batch_size))
     if input_contain_db:
         # then we generate the dialogue action
         da_batch_input_id_list = []

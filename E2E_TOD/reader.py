@@ -55,10 +55,9 @@ class _ReaderBase(object):
         """
         eval, one dialog at a time
         """
-        dialogs = {}
         turn_num = len(turn_list)
         dial_id = turn_list[0]['dial_id']
-        dialogs[dial_id] = []
+        dialogs = {dial_id: []}
         for turn_idx in range(turn_num):
             dial_turn = {}
             turn = turn_list[turn_idx]
@@ -101,22 +100,18 @@ class _ReaderBase(object):
 
         if set_name not in self.set_stats:
             self.set_stats[set_name] = {}
-        num_turns = 0
         num_dials = len(dial)
-        for d in dial:
-            num_turns += len(d)
-
+        num_turns = sum(len(d) for d in dial)
         self.set_stats[set_name]['num_turns'] = num_turns
         self.set_stats[set_name]['num_dials'] = num_dials
 
         return dial
     
     def get_nontranspose_data_iterator(self, all_batches):
-        for i, batch in enumerate(all_batches):
-            yield batch
+        yield from all_batches
 
     def get_data_iterator(self, all_batches):
-        for i, batch in enumerate(all_batches):
+        for batch in all_batches:
             yield self.transpose_batch(batch)
 
 
@@ -160,8 +155,7 @@ class MultiWozReader(_ReaderBase):
             for domain in domains:
                 fn_list = self.domain_files.get(domain)
                 if not fn_list:
-                    raise ValueError(
-                        '[%s] is an invalid experiment setting' % domain)
+                    raise ValueError(f'[{domain}] is an invalid experiment setting')
                 for fn in fn_list:
                     self.exp_files[fn.replace('.json', '')] = 1
         #
@@ -228,40 +222,28 @@ class MultiWozReader(_ReaderBase):
         print ('Start encoding data...')
         p = progressbar.ProgressBar(len(self.data))
         p.start()
-        p_idx = 0
-        for fn, dial in self.data.items():
+        for p_idx, (fn, dial) in enumerate(self.data.items()):
             p.update(p_idx)
-            p_idx += 1
             if '.json' in fn:
                 fn = fn.replace('.json', '')
             if 'all' in self.cfg.exp_domains or self.exp_files.get(fn):
                 if self.dev_files.get(fn):
                     pass
                     #self.dev.append(self._get_encoded_data(fn, dial))
-                elif self.test_files.get(fn):
-                    pass
-                    #self.test.append(self._get_encoded_data(fn, dial))
-                else:
-                    if self.data_mode == 'train':
-                        pass
-                        #self.train.append(self._get_encoded_data(fn, dial))
-                    elif self.data_mode == 'test':
-                        pass
-                    else:
+                elif not self.test_files.get(fn):
+                    if self.data_mode not in ['train', 'test']:
                         raise Exception('Wrong Reader Data Mode!!!')
         p.finish()
 
     def _get_encoded_data(self, fn, dial):
         encoded_dial = []
-        for idx, t in enumerate(dial['log']):  # tokenize to list of ids
-            enc = {}
-            enc['dial_id'] = fn
-
-            # gpt use bpe to encode strings, very very slow. ~9min
-            # in tokenization_utils.encode I find encode can pad_to_max_length, and reutrn tensor
-            enc['user'] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize( 
-                '<sos_u> ' +
-                t['user'] + ' <eos_u>'))
+        for t in dial['log']:
+            enc = {
+                'dial_id': fn,
+                'user': self.tokenizer.convert_tokens_to_ids(
+                    self.tokenizer.tokenize('<sos_u> ' + t['user'] + ' <eos_u>')
+                ),
+            }
             enc['usdx'] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(
                 '<sos_u> ' +
                 t['user'] + ' <eos_u>'))
@@ -289,9 +271,9 @@ class MultiWozReader(_ReaderBase):
             # add db results to enc, at every turn
             db_pointer = self.bspan_to_DBpointer(t['constraint'], t['turn_domain'].split())
             # db_tokens = ['<sos_db>', '<eos_db>', '[db_nores]', '[db_0]', '[db_1]', '[db_2]', '[db_3]']
-            enc['db'] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(
-                '<sos_db> ' +
-                db_pointer + ' <eos_db>'))
+            enc['db'] = self.tokenizer.convert_tokens_to_ids(
+                self.tokenizer.tokenize(f'<sos_db> {db_pointer} <eos_db>')
+            )
 
             encoded_dial.append(enc)
         return encoded_dial
@@ -352,9 +334,7 @@ class MultiWozReader(_ReaderBase):
         match_dom = turn_domain[0] if len(turn_domain) == 1 else turn_domain[1]
         match_dom = match_dom[1:-1] if match_dom.startswith('[') else match_dom
         match = matnums[match_dom]
-        # vector = self.db.addDBPointer(match_dom, match)
-        vector = self.db.addDBIndicator(match_dom, match)
-        return vector
+        return self.db.addDBIndicator(match_dom, match)
     
     def aspan_to_act_list(self, aspan):
         aspan = aspan.split() if isinstance(aspan, str) else aspan
@@ -373,14 +353,14 @@ class MultiWozReader(_ReaderBase):
                     continue
                 vidx = idx+1
                 if vidx == conslen:
-                    acts.append(domain+'-'+cons[1:-1]+'-none')
+                    acts.append(f'{domain}-{cons[1:-1]}-none')
                     break
                 vt = aspan[vidx]
                 vt = self.vocab.decode(vt) if type(vt) is not str else vt
                 no_param_act = True
                 while vidx < conslen and vt != '<eos_a>' and '[' not in vt:
                     no_param_act = False
-                    acts.append(domain+'-'+cons[1:-1]+'-'+vt)
+                    acts.append(f'{domain}-{cons[1:-1]}' + '-' + vt)
                     vidx += 1
                     if vidx == conslen:
                         break
@@ -407,7 +387,7 @@ class MultiWozReader(_ReaderBase):
 
     def wrap_result_lm(self, result_dict, eos_syntax=None):
         results = []
-        eos_syntax = ontology.eos_tokens if not eos_syntax else eos_syntax
+        eos_syntax = eos_syntax or ontology.eos_tokens
         sos_syntax = ontology.sos_tokens
         # ground truth bs, as, ds.. generate response
         field = ['dial_id', 'turn_num', 'user', 'bspn_gen', 'bsdx', 'resp_gen', 'resp', 'aspn_gen', 'aspn',
@@ -438,8 +418,6 @@ class MultiWozReader(_ReaderBase):
                             v.remove(sos_syntax[key])
 
                         v = " ".join(v)
-                    else: 
-                        pass # v = v
                     entry[key] = v
 
                 results.append(entry)

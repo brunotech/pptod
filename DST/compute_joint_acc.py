@@ -38,13 +38,9 @@ def compute_jacc(data,default_cleaning_flag=True,type2_cleaning_flag=False):
             if set(turn_target) == set(turn_pred):
                 joint_acc += 1
                 join_flag = True
-            
+
             elif type2_cleaning_flag: # check for possible Type 2 noisy annotations
-                flag = True
-                for bs in turn_target:
-                    if bs not in turn_pred:
-                        flag = False
-                        break
+                flag = all(bs in turn_pred for bs in turn_target)
                 if flag:
                     for bs in turn_pred:
                         if bs not in turn_target:
@@ -53,9 +49,10 @@ def compute_jacc(data,default_cleaning_flag=True,type2_cleaning_flag=False):
 
                 if flag: # model prediction might be correct if found in Type 2 list of noisy annotations
                     dial_name = dial.split('.')[0]
-                    if dial_name in IGNORE_TURNS_TYPE2 and turn_id in IGNORE_TURNS_TYPE2[dial_name]: # ignore these turns
-                        pass
-                    else:
+                    if (
+                        dial_name not in IGNORE_TURNS_TYPE2
+                        or turn_id not in IGNORE_TURNS_TYPE2[dial_name]
+                    ):
                         joint_acc += 1
                         join_flag = True
             if not join_flag:
@@ -64,11 +61,11 @@ def compute_jacc(data,default_cleaning_flag=True,type2_cleaning_flag=False):
                 turn_data['gtbs'] = turn_target
                 turn_data['predbs'] = turn_pred
                 error[file_name][turn_id] = turn_data
-                
+
             num_turns += 1
 
     joint_acc /= num_turns
-    
-    print('joint accuracy: {}'.format(joint_acc))
+
+    print(f'joint accuracy: {joint_acc}')
     return joint_acc
     
