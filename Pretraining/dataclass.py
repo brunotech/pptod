@@ -34,8 +34,10 @@ dataset_name_list = ['e2e_ms', 'metalwoz', 'kvret', 'woz', 'camres676', 'taskmas
 class TOD_PRETRAINING_CORPUS:
     def __init__(self, tokenizer, shuffle_mode, dataset_prefix_path, use_nlu, use_bs, use_da, use_nlg, max_tgt_len=128):
         self.use_nlu, self.use_bs, self.use_da, self.use_nlg = \
-        map_bool(use_nlu), map_bool(use_bs), map_bool(use_da), map_bool(use_nlg)
-        print ('use NLU: {}, use DST: {}, use POL: {}, use NLG: {}'.format(use_nlu, use_bs, use_da, use_nlg))
+            map_bool(use_nlu), map_bool(use_bs), map_bool(use_da), map_bool(use_nlg)
+        print(
+            f'use NLU: {use_nlu}, use DST: {use_bs}, use POL: {use_da}, use NLG: {use_nlg}'
+        )
 
         print ('Tokenizer Size is %d' % len(tokenizer))
         self.tokenizer = tokenizer
@@ -63,9 +65,9 @@ class TOD_PRETRAINING_CORPUS:
 
 
         self.train_all_dataset_list = self.load_data(dataset_prefix_path, train_test_mode='train', \
-            use_bs=self.use_bs, use_da=self.use_da, use_nlg=self.use_nlg)
+                use_bs=self.use_bs, use_da=self.use_da, use_nlg=self.use_nlg)
         self.dev_all_dataset_list = self.load_data(dataset_prefix_path, train_test_mode='test', \
-            use_bs=self.use_bs, use_da=self.use_da, use_nlg=self.use_nlg)
+                use_bs=self.use_bs, use_da=self.use_da, use_nlg=self.use_nlg)
 
         if self.use_nlu == True:
             print ('Add Intent Classification for Pretraining.')
@@ -82,8 +84,12 @@ class TOD_PRETRAINING_CORPUS:
 
         self.train_data_list = self.shuffle_train_data()
         self.dev_data_list = self.flatten_data(self.dev_all_dataset_list, mode='dev_set')
-        print ('train session number is {}, train turn number is {}, train turn number per session {}'.format(train_session_num, len(self.train_data_list), round(len(self.train_data_list)/train_session_num, 2)))
-        print ('dev session number is {}, dev turn numbder is {}, dev turn number per session {}'.format(dev_session_num, len(self.dev_data_list), round(len(self.dev_data_list)/dev_session_num, 2)))
+        print(
+            f'train session number is {train_session_num}, train turn number is {len(self.train_data_list)}, train turn number per session {round(len(self.train_data_list) / train_session_num, 2)}'
+        )
+        print(
+            f'dev session number is {dev_session_num}, dev turn numbder is {len(self.dev_data_list)}, dev turn number per session {round(len(self.dev_data_list) / dev_session_num, 2)}'
+        )
         self.train_num, self.dev_num = len(self.train_data_list), len(self.dev_data_list)
 
     def load_data(self, dataset_prefix_path, train_test_mode, use_bs, use_da, use_nlg):
@@ -98,17 +104,17 @@ class TOD_PRETRAINING_CORPUS:
         assert train_test_mode in ['train', 'test']
         # train_test_mode: 'train' or 'test'
         bs_exist, da_exist, nlg_exist = format_mapping_dict[data_set_name]['bs'], \
-        format_mapping_dict[data_set_name]['da'], format_mapping_dict[data_set_name]['nlg']
-        dataset_path = dataset_prefix_path + '/' + data_set_name + '_' + train_test_mode + '.json'
+            format_mapping_dict[data_set_name]['da'], format_mapping_dict[data_set_name]['nlg']
+        dataset_path = f'{dataset_prefix_path}/{data_set_name}_{train_test_mode}.json'
 
-        print ('Loading data from {}'.format(dataset_path))
+        print(f'Loading data from {dataset_path}')
         with open(dataset_path) as f:
             data = json.load(f) 
 
         all_sess_list = []
         for one_sess in data:
             dial_sess_list = one_sess["dialogue_session"] # this list contains all turns from on session
-            one_sess_list = [] 
+            one_sess_list = []
             # one_sess_list is a list of turns
             # each turn is list of tuple pairs
             previous_context = []
@@ -125,14 +131,14 @@ class TOD_PRETRAINING_CORPUS:
                     # construct nlg_input, nlg_output
                     nlg_input = previous_context + curr_user_input 
                     nlg_input = self.nlg_prefix_id + [self.sos_context_token_id] + \
-                    nlg_input[-900:] + [self.eos_context_token_id]
+                        nlg_input[-900:] + [self.eos_context_token_id]
                     nlg_output = curr_sys_resp[:-1][:self.max_tgt_len] + [self.eos_r_token_id] # constrain the maximum tgt len
                     curr_turn_list.append((nlg_input, nlg_output))
 
                 if use_bs and bs_exist:
                     bs_input = previous_context + curr_user_input
                     bs_input = self.bs_prefix_id + [self.sos_context_token_id] + bs_input[-900:] + \
-                    [self.eos_context_token_id]
+                        [self.eos_context_token_id]
                     curr_bspn = curr_turn['bspn_id_list']
                     bs_output = curr_bspn[:-1][:self.max_tgt_len] + [self.eos_b_token_id]
                     curr_turn_list.append((bs_input, bs_output))
@@ -140,21 +146,21 @@ class TOD_PRETRAINING_CORPUS:
                 if use_da and da_exist:
                     da_input = previous_context + curr_user_input 
                     da_input = self.da_prefix_id + [self.sos_context_token_id] + da_input[-900:] + \
-                        [self.eos_context_token_id]
+                            [self.eos_context_token_id]
                     curr_aspn = curr_turn['aspn_id_list']
                     da_output = curr_aspn[:-1][:self.max_tgt_len] + [self.eos_a_token_id]
                     curr_turn_list.append((da_input, da_output))
 
-                if len(curr_turn_list) > 0:
+                if curr_turn_list:
                     one_sess_list.append(curr_turn_list)
                 # update previous context
                 previous_context = previous_context + curr_user_input + curr_sys_resp
-            if len(one_sess_list) > 0:
+            if one_sess_list:
                 all_sess_list.append(one_sess_list)
         return all_sess_list
 
     def load_intent_classification_data(self, path):
-        
+
         '''
             we treat each instance as a session, each data instance is treated as one session with one turn.
             so all instances have the following format
@@ -170,13 +176,13 @@ class TOD_PRETRAINING_CORPUS:
                 ...
             ]
         '''
-        print ('Loading data from {}'.format(path))
+        print(f'Loading data from {path}')
         all_sess_list = []
         with open(path) as f:
-            data = json.load(f) 
+            data = json.load(f)
         for one_dict in data:
             one_intent_input = self.ic_prefix_id + [self.sos_context_token_id] + \
-                one_dict['user_id_list'][-900:] + [self.eos_context_token_id]
+                    one_dict['user_id_list'][-900:] + [self.eos_context_token_id]
             one_intent_output = one_dict['intent_id_list']
             one_turn = [(one_intent_input, one_intent_output)]
             one_sess = [one_turn]
@@ -184,9 +190,9 @@ class TOD_PRETRAINING_CORPUS:
         return all_sess_list
 
     def load_train_dev_intent_classification_data(self, dataset_prefix_path):
-        train_path = dataset_prefix_path + '/train_intent_classification.json'
+        train_path = f'{dataset_prefix_path}/train_intent_classification.json'
         train_ic_sess_list = self.load_intent_classification_data(train_path)
-        dev_path = dataset_prefix_path + '/test_intent_classification.json'
+        dev_path = f'{dataset_prefix_path}/test_intent_classification.json'
         dev_ic_sess_list = self.load_intent_classification_data(dev_path)
         return train_ic_sess_list, dev_ic_sess_list
 
@@ -210,21 +216,18 @@ class TOD_PRETRAINING_CORPUS:
                 random.shuffle(tmp_session_list)
                 for one_session in tmp_session_list:
                     for one_turn in one_session:
-                        for one_tuple in one_turn:
-                            flatten_data_list.append(one_tuple)
+                        flatten_data_list.extend(iter(one_turn))
             elif self.shuffle_mode == 'turn_level':
                 for one_session in all_dataset_session_list:
                     for one_turn in one_session:
-                        for one_tuple in one_turn:
-                            flatten_data_list.append(one_tuple)
+                        flatten_data_list.extend(iter(one_turn))
                 random.shuffle(flatten_data_list)
             else:
                 raise Exception('Wrong Shuffle Mode!!!')
         elif mode == 'dev_set':
             for one_session in all_dataset_session_list:
                 for one_turn in one_session:
-                    for one_tuple in one_turn:
-                        flatten_data_list.append(one_tuple)
+                    flatten_data_list.extend(iter(one_turn))
         else:
             raise Exception()
         return flatten_data_list
@@ -259,15 +262,12 @@ class TOD_PRETRAINING_CORPUS:
                 one_output_batch_list.append(all_output_data_list[idx])
             one_batch = [one_input_batch_list, one_output_batch_list]
             batch_list.append(one_batch)
-        out_str = 'Overall Number of datapoints is ' + str(data_num) + \
-        ' Number of ' + mode + ' batches is ' + str(len(batch_list))
+        out_str = f'Overall Number of datapoints is {data_num} Number of {mode} batches is {len(batch_list)}'
         print (out_str)
         return batch_list
 
     def build_iterator(self, batch_size, mode):
-        batch_list = self.get_batches(batch_size, mode)
-        for i, batch in enumerate(batch_list):
-            yield batch
+        yield from self.get_batches(batch_size, mode)
 
     def pad_batch(self, batch_id_list):
         batch_id_list = [torch.LongTensor(item) for item in batch_id_list]

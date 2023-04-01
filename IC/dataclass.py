@@ -9,7 +9,7 @@ from torch.nn.utils import rnn
 class Banking77:
     def __init__(self, tokenizer, train_path, test_path, datapoints_per_intent, format_mode):
         self.tokenizer = tokenizer
-        print ('Tokenizer size is {}'.format(len(tokenizer)))
+        print(f'Tokenizer size is {len(tokenizer)}')
 
         if format_mode == 'bs':
             prefix_text = 'translate dialogue to belief state:'
@@ -39,13 +39,15 @@ class Banking77:
         self.datapoints_per_intent = datapoints_per_intent
         print ('Loading training data...')
         self.train_intent_uttr_dict = self.load_path(train_path)
-        print ('Reforming training data with each intent has maximum {} datapoints'.format(self.datapoints_per_intent))
+        print(
+            f'Reforming training data with each intent has maximum {self.datapoints_per_intent} datapoints'
+        )
         self.train_data_id_list = self.reform_intent_uttr_dict(self.train_intent_uttr_dict, mode='train')
-        print ('Training data size is {}'.format(len(self.train_data_id_list)))
+        print(f'Training data size is {len(self.train_data_id_list)}')
         print ('Loading test data...')
         self.test_intent_uttr_dict = self.load_path(test_path)
         self.test_data_id_list = self.reform_intent_uttr_dict(self.test_intent_uttr_dict, mode='test')
-        print ('Test data size is {}'.format(len(self.test_data_id_list)))
+        print(f'Test data size is {len(self.test_data_id_list)}')
         self.train_num, self.test_num = len(self.train_data_id_list), len(self.test_data_id_list)
 
     def load_path(self, path):
@@ -68,14 +70,13 @@ class Banking77:
                     intent_utterance_dict[label] = [text]
         print ('Print file statistics...')
         for key in intent_utterance_dict:
-            print ('The number of {} instances is {}'.format(key, len(intent_utterance_dict[key])))
+            print(f'The number of {key} instances is {len(intent_utterance_dict[key])}')
         return intent_utterance_dict
 
     def tokenize_usr_text(self, text):
         token_id_list = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
         token_id_list = [self.sos_context_token_id, self.sos_usr_token_id] + token_id_list + [self.eos_usr_token_id, self.eos_context_token_id]
-        token_id_list = self.prefix_id + token_id_list
-        return token_id_list
+        return self.prefix_id + token_id_list
 
     def tokenize_label_text(self, text):
         token_id_list = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
@@ -130,17 +131,13 @@ class Banking77:
                 one_input_batch_list.append(all_input_data_list[idx])
                 one_output_batch_list.append(all_output_data_list[idx])
             one_batch = [one_input_batch_list, one_output_batch_list]
-            if len(one_batch[0]) == 0:
-                pass
-            else:
+            if len(one_batch[0]) != 0:
                 batch_list.append(one_batch)
-        print ('Number of {} batches is {}'.format(mode, len(batch_list)))
+        print(f'Number of {mode} batches is {len(batch_list)}')
         return batch_list
 
     def build_iterator(self, batch_size, mode):
-        batch_list = self.get_batches(batch_size, mode)
-        for i, batch in enumerate(batch_list):
-            yield batch
+        yield from self.get_batches(batch_size, mode)
 
     def pad_batch(self, batch_id_list):
         batch_id_list = [torch.LongTensor(item) for item in batch_id_list]

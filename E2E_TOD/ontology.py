@@ -58,9 +58,7 @@ all_infslot = ["type", "parking", "pricerange", "internet", "stay", "day", "peop
 # count: 17
 
 all_slots = all_reqslot + ["stay", "day", "people", "name", "destination", "departure", "department"]
-get_slot = {}
-for s in all_slots:
-    get_slot[s] = 1
+get_slot = {s: 1 for s in all_slots}
 # count: 24
 
 

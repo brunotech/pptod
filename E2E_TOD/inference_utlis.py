@@ -14,9 +14,7 @@ import torch.nn.functional as F
 def restore_text(text, mode):
     if mode == 'bs':
         text = re.sub(' is ', ' ', text)
-    elif mode == 'da':
-        pass
-    else:
+    elif mode != 'da':
         raise Exception('Wrong Restore Mode!!!')
     text = re.sub(' , ', ' ', text)
     text = ' '.join(text.split()).strip()
@@ -69,12 +67,8 @@ def batch_generate(model, one_inference_batch, ref_bs, ref_act, ref_db, input_co
         device = torch.device('cuda')
         if torch.cuda.device_count() > 1: # multi-gpu training 
             model = model.module
-        else: # single gpu training
-            pass
     else:
         device = 0
-
-    reform_bs_and_act = False
 
     max_span_len, max_response_len = 80, 120
     tokenizer = data.tokenizer
@@ -98,39 +92,33 @@ def batch_generate(model, one_inference_batch, ref_bs, ref_act, ref_db, input_co
             bs_tensor = bs_tensor.cuda(device)
             bs_mask = bs_mask.cuda(device)
         batch_bs_text = model.batch_generate(bs_tensor, bs_mask, generate_mode='bs', max_decode_len=max_response_len)
-        # the belief state sequence could be long
+        reform_bs_and_act = False
+
         batch_bs_restore_text = []
         for idx in range(batch_size):
+            one_bs_text = batch_bs_text[idx]
             if reform_bs_and_act:
-                one_bs_text = batch_bs_text[idx]
                 res_batch_parse_dict[idx]['bspn_gen_reform'] = one_bs_text
                 one_bs_restore_text = restore_text(one_bs_text, mode='bs')
                 res_batch_parse_dict[idx]['bspn_gen'] = one_bs_restore_text
                 batch_bs_restore_text.append(one_bs_restore_text)
             else:
-                one_bs_text = batch_bs_text[idx]
                 res_batch_parse_dict[idx]['bspn_gen'] = one_bs_text
         if reform_bs_and_act:
             batch_bs_text = batch_bs_restore_text
-        else:
-            pass
-
+        # we need to query the db base
+        batch_db_input_id_list = []
         if input_contain_db:
-            # we need to query the db base
-            batch_db_input_id_list = []
             for idx in range(batch_size):
                 one_queried_db_result = \
                 data.reader.bspan_to_DBpointer(batch_bs_text[idx], res_batch_parse_dict[idx]['turn_domain'])
-                one_db_text = '<sos_db> ' + one_queried_db_result + ' <eos_db>' 
+                one_db_text = f'<sos_db> {one_queried_db_result} <eos_db>'
                 #print (db_text)
                 #print (one_db_text)
                 one_db_token_id_input = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(one_db_text))
                 batch_db_input_id_list.append(one_db_token_id_input)
         else:
-            batch_db_input_id_list = []
-            for _ in range(batch_size):
-                batch_db_input_id_list.append([])
-
+            batch_db_input_id_list.extend([] for _ in range(batch_size))
         # then we generate the dialogue action
         da_batch_input_id_list = []
         for idx in range(batch_size):
@@ -161,7 +149,17 @@ def batch_generate(model, one_inference_batch, ref_bs, ref_act, ref_db, input_co
         for idx in range(batch_size):
             res_batch_parse_dict[idx]['resp_gen'] = batch_nlg_text[idx]
 
-    elif evaluation_setup == 'policy': 
+    elif evaluation_setup == 'oracle':
+        # we only need to generate the response
+        # nlg_batch already contains the ref db result
+        nlg_tensor, nlg_mask = data.pad_batch(nlg_batch)
+        if is_cuda:
+            nlg_tensor = nlg_tensor.cuda(device)
+            nlg_mask = nlg_mask.cuda(device)
+        batch_nlg_text = model.batch_generate(nlg_tensor, nlg_mask, generate_mode='nlg', max_decode_len=max_response_len)
+        for idx in range(batch_size):
+            res_batch_parse_dict[idx]['resp_gen'] = batch_nlg_text[idx]
+    elif evaluation_setup == 'policy':
         # we need to generate the dialogue action and dialogue response
         # the da input already contains the ref db result
         da_tensor, da_mask = data.pad_batch(da_batch)
@@ -180,16 +178,6 @@ def batch_generate(model, one_inference_batch, ref_bs, ref_act, ref_db, input_co
         for idx in range(batch_size):
             res_batch_parse_dict[idx]['resp_gen'] = batch_nlg_text[idx]
 
-    elif evaluation_setup == 'oracle':
-        # we only need to generate the response
-        # nlg_batch already contains the ref db result
-        nlg_tensor, nlg_mask = data.pad_batch(nlg_batch)
-        if is_cuda:
-            nlg_tensor = nlg_tensor.cuda(device)
-            nlg_mask = nlg_mask.cuda(device)
-        batch_nlg_text = model.batch_generate(nlg_tensor, nlg_mask, generate_mode='nlg', max_decode_len=max_response_len)
-        for idx in range(batch_size):
-            res_batch_parse_dict[idx]['resp_gen'] = batch_nlg_text[idx]
     else:
         raise Exception('Wrong Evaluation Setup.')
     return res_batch_parse_dict

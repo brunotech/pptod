@@ -63,7 +63,7 @@ def list_file_names(path):
     res_list = []
     for file in file_list:
         if file.startswith('dialogue') and file.endswith('.json'):
-            one_file = path + '/' + file
+            one_file = f'{path}/{file}'
             res_list.append(one_file)
     return res_list
 
@@ -110,13 +110,13 @@ def restore_text(text):
 def transform_dict_to_text(one_domain_dict, domain):
     res_text = ''
     resdx_text = ''
-    res_text += domain + ' '
-    resdx_text += domain + ' '
+    res_text += f'{domain} '
+    resdx_text += f'{domain} '
     slot_name_list = one_domain_dict['slot_value_list']
     for name in slot_name_list:
         value = one_domain_dict[name]
-        res_text += name + ' ' + value + ' '
-        resdx_text += name + ' '
+        res_text += f'{name} {value} '
+        resdx_text += f'{name} '
     res_text = res_text.strip().strip(',').strip()
     resdx_text = resdx_text.strip().strip(',').strip()
     return res_text, resdx_text
@@ -127,7 +127,7 @@ def extract_usr_belief_state(usr_dict, prev_bs_dict, prev_bs_name_list):
     frame_list = usr_dict['frames']
     res_text = ''
     for frame in frame_list:
-        curr_domain = '[' + domain_map_dict[frame['service']] + ']'        
+        curr_domain = '[' + domain_map_dict[frame['service']] + ']'
         slot_value_list = frame['state']["slot_values"]
         tmp_list = []
         for key in slot_value_list:
@@ -137,10 +137,8 @@ def extract_usr_belief_state(usr_dict, prev_bs_dict, prev_bs_name_list):
                 continue
             else:
                 tmp_list.append((slot_name, slot_value[0]))
-                
-        if len(tmp_list) == 0:
-            continue
-        else:
+
+        if tmp_list:
             # update domain dictionary
             try:
                 res_bs_dict[curr_domain]
@@ -150,28 +148,29 @@ def extract_usr_belief_state(usr_dict, prev_bs_dict, prev_bs_name_list):
                 res_bs_name_list.append(curr_domain)
             for item in tmp_list:
                 one_slot_name, one_slot_value = item
-                if one_slot_name in res_bs_dict[curr_domain]['slot_value_list']:
-                    pass
-                else:
+                if (
+                    one_slot_name
+                    not in res_bs_dict[curr_domain]['slot_value_list']
+                ):
                     res_bs_dict[curr_domain]['slot_value_list'].append(one_slot_name)
                 res_bs_dict[curr_domain][one_slot_name] = one_slot_value
-    
+
     res_text = ''
     resdx_text = ''
     for domain in res_bs_name_list:
         one_domain_dict = res_bs_dict[domain]
         one_domain_text, one_domain_dx_text = transform_dict_to_text(one_domain_dict, domain)
-        res_text += one_domain_text + ' '
-        resdx_text += one_domain_dx_text + ' '
+        res_text += f'{one_domain_text} '
+        resdx_text += f'{one_domain_dx_text} '
     return res_text.strip(), resdx_text.strip(), res_bs_dict, res_bs_name_list            
 
 def get_one_domain_action_text(domain_action_dict, domain):
-    res_text = domain + ' '
+    res_text = f'{domain} '
     action_type_list = domain_action_dict['action_type_list']
     for action_type in action_type_list:
-        res_text += action_type + ' '
+        res_text += f'{action_type} '
         value_text = ' '.join(domain_action_dict[action_type])
-        res_text += value_text + ' '
+        res_text += f'{value_text} '
     return res_text.strip()
 
 def extract_system_action(system_dict):
@@ -200,15 +199,13 @@ def extract_system_action(system_dict):
                 assert action_type in res_dict[domain_name]['action_type_list']
             except KeyError:
                 res_dict[domain_name][action_type] = []
-            if slot in res_dict[domain_name][action_type]:
-                pass
-            else:
+            if slot not in res_dict[domain_name][action_type]:
                 res_dict[domain_name][action_type].append(slot)
     res_text = ''
     for domain in action_domain_list:
         one_domain_dict = res_dict[domain]
         one_domain_text = get_one_domain_action_text(one_domain_dict, domain)
-        res_text += one_domain_text + ' '
+        res_text += f'{one_domain_text} '
     return ' '.join(res_text.split()).strip()
 
 def zip_turn(one_turn_list, prev_bs_dict, prev_bs_name_list):
@@ -230,13 +227,15 @@ def process_session_list(session_list):
         one_turn_list = session_list[idx]
         one_usr_uttr, one_usr_bs, one_usr_bsdx, one_system_uttr, one_system_action, \
         bs_dict, bs_name_list = zip_turn(one_turn_list, bs_dict, bs_name_list)
-        one_turn_dict = {'turn_num':idx}
-        one_turn_dict['user'] = one_usr_uttr
-        one_turn_dict['resp'] = one_system_uttr
-        one_turn_dict['turn_domain'] = bs_name_list
-        one_turn_dict['bspn'] = one_usr_bs
-        one_turn_dict['bsdx'] = one_usr_bsdx
-        one_turn_dict['aspn'] = one_system_action
+        one_turn_dict = {
+            'turn_num': idx,
+            'user': one_usr_uttr,
+            'resp': one_system_uttr,
+            'turn_domain': bs_name_list,
+            'bspn': one_usr_bs,
+            'bsdx': one_usr_bsdx,
+            'aspn': one_system_action,
+        }
         res_dict['dialogue_session'].append(one_turn_dict)
     return res_dict
 
@@ -268,18 +267,16 @@ if __name__ == '__main__':
 
     import os
     save_path = r'../separate_datasets/Schema_Guided/'
-    if os.path.exists(save_path):
-        pass
-    else: # recursively construct directory
+    if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
 
     import json
-    out_f = save_path + '/schema_guided_train.json'
+    out_f = f'{save_path}/schema_guided_train.json'
     with open(out_f, 'w') as outfile:
         json.dump(train_list, outfile, indent=4)
 
-    out_f = save_path + r'/schema_guided_test.json'
+    out_f = f'{save_path}/schema_guided_test.json'
     with open(out_f, 'w') as outfile:
         json.dump(dev_list, outfile, indent=4)
 

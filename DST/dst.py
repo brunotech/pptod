@@ -128,22 +128,22 @@ def ignore_none(pred_belief, target_belief):
 
     clean_target_belief = []
     clean_pred_belief = []
-    for bs in target_belief:
-        if 'not mentioned' in bs or 'none' in bs:
-            continue
-        clean_target_belief.append(bs)
-
-    for bs in pred_belief:
-        if 'not mentioned' in bs or 'none' in bs:
-            continue
-        clean_pred_belief.append(bs)
-
+    clean_target_belief.extend(
+        bs
+        for bs in target_belief
+        if 'not mentioned' not in bs and 'none' not in bs
+    )
+    clean_pred_belief.extend(
+        bs
+        for bs in pred_belief
+        if 'not mentioned' not in bs and 'none' not in bs
+    )
     dontcare_slots = []
     for bs in target_belief:
         if 'dontcare' in bs:
             domain = bs.split()[0]
             slot = bs.split()[1]
-            dontcare_slots.append('{}_{}'.format(domain, slot))
+            dontcare_slots.append(f'{domain}_{slot}')
 
     target_belief = clean_target_belief
     pred_belief = clean_pred_belief
@@ -210,7 +210,7 @@ def default_cleaning(pred_belief, target_belief):
 
         slot, val = fix_mismatch_jason(slot, val)
 
-        pred_belief_jason.append('{} {} {}'.format(domain, slot, val))
+        pred_belief_jason.append(f'{domain} {slot} {val}')
 
     for tgt in target_belief:
         domain = tgt.split()[0]
@@ -224,7 +224,7 @@ def default_cleaning(pred_belief, target_belief):
         if slot in GENERAL_TYPO:
             val = GENERAL_TYPO[slot]
         slot, val = fix_mismatch_jason(slot, val)
-        target_belief_jason.append('{} {} {}'.format(domain, slot, val))
+        target_belief_jason.append(f'{domain} {slot} {val}')
 
     turn_pred = pred_belief_jason
     turn_target = target_belief_jason

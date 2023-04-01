@@ -27,8 +27,7 @@ class T5Gen_Model(nn.Module):
     def forward(self, src_input, src_mask, tgt_input, tgt_output):
         src_mask = src_mask.type(src_input.type())
         outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=tgt_input, labels=tgt_output)
-        loss = outputs[0]#.mean()
-        return loss
+        return outputs[0]
 
     def tokenized_decode(self, token_id_list):
         pred_tokens = self.tokenizer.convert_ids_to_tokens(token_id_list)
@@ -37,16 +36,16 @@ class T5Gen_Model(nn.Module):
         for token in pred_tokens:
             if token in self.special_token_list + ['<s>', '</s>', '<pad>']:
                 if len(curr_list) == 0:
-                    res_text += ' ' + token + ' '
+                    res_text += f' {token} '
                 else:
                     curr_res = self.tokenizer.convert_tokens_to_string(curr_list)
-                    res_text = res_text + ' ' + curr_res + ' ' + token + ' '
+                    res_text = f'{res_text} {curr_res} {token} '
                     curr_list = []
             else:
                 curr_list.append(token)
         if len(curr_list) > 0:
             curr_res = self.tokenizer.convert_tokens_to_string(curr_list)
-            res_text = res_text + ' ' + curr_res + ' '
+            res_text = f'{res_text} {curr_res} '
         res_text_list = res_text.strip().split()
         res_text = ' '.join(res_text_list).strip()
         return res_text
@@ -70,7 +69,7 @@ class T5Gen_Model(nn.Module):
         else:
             start_token, end_token = '<pad>', '</s>'
             start_token_id, end_token_id = \
-            self.tokenizer.convert_tokens_to_ids([start_token])[0], self.tokenizer.convert_tokens_to_ids([end_token])[0]
+                self.tokenizer.convert_tokens_to_ids([start_token])[0], self.tokenizer.convert_tokens_to_ids([end_token])[0]
 
         outputs = self.model.generate(input_ids = src_input, attention_mask = src_mask, decoder_start_token_id = start_token_id,
             pad_token_id = self.pad_token_id, eos_token_id = end_token_id, max_length = max_decode_len)
@@ -81,14 +80,11 @@ class T5Gen_Model(nn.Module):
             #print (one_res_text)
             one_res_text = one_res_text.split(start_token)[-1].split(end_token)[0].strip()
 
-            final_res_list = []
-            for token in one_res_text.split():
-                if token == '<_PAD_>':
-                    continue
-                else:
-                    final_res_list.append(token)
+            final_res_list = [
+                token for token in one_res_text.split() if token != '<_PAD_>'
+            ]
             one_res_text = ' '.join(final_res_list).strip()
-            
+
             res_text_list.append(one_res_text)
         return res_text_list
 

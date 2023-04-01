@@ -21,14 +21,10 @@ def update_belief_state(prev_bs_dict, prev_slot_name_list, curr_slot_dict):
     res_bs_dict = prev_bs_dict.copy()
     res_slot_name_list = prev_slot_name_list.copy()
     for slot in curr_slot_dict:
-        if slot in res_bs_dict: # check if the slot exists
-            res_bs_dict[slot] = curr_slot_dict[slot] # update the slot value
-        else:
+        if slot not in res_bs_dict:
             res_slot_name_list.append(slot)
-            res_bs_dict[slot] = curr_slot_dict[slot]
-    res_list = []
-    for name in res_slot_name_list:
-        res_list.append((name, res_bs_dict[name]))
+        res_bs_dict[slot] = curr_slot_dict[slot] # update the slot value
+    res_list = [(name, res_bs_dict[name]) for name in res_slot_name_list]
     return res_list, res_bs_dict, res_slot_name_list
 
 domain = r'[car_assistant]'
@@ -46,11 +42,11 @@ def zip_turn(turn_list, prev_bs_dict, prev_slot_name_list):
 def get_bs_text(bs_list):
     if len(bs_list) == 0: # no belief state
         return '', ''
-    bs_text, bsdx_text = domain + ' ', domain + ' '
+    bs_text, bsdx_text = f'{domain} ', f'{domain} '
     for item in bs_list:
         slot = token_map[item[0]]
-        bs_text += slot + ' ' + item[1] + ' '
-        bsdx_text += slot + ' '
+        bs_text += f'{slot} {item[1]} '
+        bsdx_text += f'{slot} '
     bs_text = ' '.join(bs_text.strip().strip(',').strip().split())
     bsdx_text = ' '.join(bsdx_text.strip().strip(',').strip().split())
     return bs_text, bsdx_text
@@ -80,19 +76,21 @@ def process_dialogue_session(session_list):
         if idx == 0:
             bs_dict, slot_name_list = {}, []
         one_turn_list = session_list[idx]
-        
+
         user_utterance, system_utterance, bs_list, bs_dict, slot_name_list = \
         zip_turn(one_turn_list, bs_dict, slot_name_list)
-        
+
         bs_text, bsdx_text = get_bs_text(bs_list)
-        
-        one_turn_dict = {'turn_num':idx}
-        one_turn_dict['user'] = user_utterance
-        one_turn_dict['resp'] = system_utterance
-        one_turn_dict['turn_domain'] = [domain]
-        one_turn_dict['bspn'] = bs_text
-        one_turn_dict['bsdx'] = bsdx_text
-        one_turn_dict['aspn'] = ''
+
+        one_turn_dict = {
+            'turn_num': idx,
+            'user': user_utterance,
+            'resp': system_utterance,
+            'turn_domain': [domain],
+            'bspn': bs_text,
+            'bsdx': bsdx_text,
+            'aspn': '',
+        }
         res_dict['dialogue_session'].append(one_turn_dict)
     return res_dict
 
@@ -116,9 +114,7 @@ if __name__ == '__main__':
     import json
     import os
     save_path = r'../separate_datasets/KVRET/'
-    if os.path.exists(save_path):
-        pass
-    else: # recursively construct directory
+    if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
     in_f = r'../raw_data/kvret/kvret_train_public.json'
@@ -127,13 +123,13 @@ if __name__ == '__main__':
     dev_data_list = process_file(in_f)
     data_list = train_data_list + dev_data_list
 
-    out_f = save_path + r'/kvret_train.json'
+    out_f = f'{save_path}/kvret_train.json'
     with open(out_f, 'w') as outfile:
         json.dump(data_list, outfile, indent=4)
 
     in_f = r'../raw_data/kvret/kvret_test_public.json'
     test_data_list = process_file(in_f)
-    out_f = save_path + r'/kvret_test.json'
+    out_f = f'{save_path}/kvret_test.json'
     with open(out_f, 'w') as outfile:
         json.dump(test_data_list, outfile, indent=4)
     print ('Processing KVRET Dataset Finished!')

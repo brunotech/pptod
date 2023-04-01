@@ -15,8 +15,8 @@ def update_belief_state(usr_dict, prev_bs_dict, prev_bs_name_list):
         res_dx_text = '[restaurant] '
         for name in res_bs_name_list:
             value = res_bs_dict[name]
-            res_text += name + ' = ' + value + ' , '
-            res_dx_text += name + ' , '
+            res_text += f'{name} = {value} , '
+            res_dx_text += f'{name} , '
         res_text = res_text.strip().strip(' , ').strip()
         res_dx_text = res_dx_text.strip().strip(' , ').strip()
     return res_text, res_dx_text, res_bs_dict, res_bs_name_list
@@ -49,13 +49,14 @@ def process_session(sess_list):
         one_usr_uttr = one_usr_dict['usr']['transcript']
         one_usr_bs_reform, one_usr_bsdx_reform, bs_dict, bs_name_list = \
         update_belief_state(one_usr_dict, bs_dict, bs_name_list)
-        
-        one_turn_dict = {'turn_num':idx}
-        one_turn_dict['user'] = one_usr_uttr
-        one_turn_dict['resp'] = one_system_uttr
-        one_turn_dict['turn_domain'] = ['[restaurant]']
-        #one_turn_dict['bspn_reform'] = one_usr_bs_reform
-        one_turn_dict['bspn'] = restore_text(one_usr_bs_reform)
+
+        one_turn_dict = {
+            'turn_num': idx,
+            'user': one_usr_uttr,
+            'resp': one_system_uttr,
+            'turn_domain': ['[restaurant]'],
+            'bspn': restore_text(one_usr_bs_reform),
+        }
         #one_turn_dict['bsdx_reform'] = one_usr_bsdx_reform
         one_turn_dict['bsdx'] = restore_text(one_usr_bsdx_reform)
         #one_turn_dict['aspn_reform'] = ''
@@ -83,9 +84,7 @@ if __name__ == '__main__':
     import json
     import os
     save_path = r'../separate_datasets/CamRes676/'
-    if os.path.exists(save_path):
-        pass
-    else: # recursively construct directory
+    if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
     in_f = r'../raw_data/CamRest676/CamRest676.json'
@@ -93,12 +92,12 @@ if __name__ == '__main__':
     random.shuffle(res_list)
     train_list = res_list[:600]
     test_list = res_list[600:]
-    
-    out_f = save_path + r'/camres676_train.json'
+
+    out_f = f'{save_path}/camres676_train.json'
     with open(out_f, 'w') as outfile:
         json.dump(train_list, outfile, indent=4)
 
-    out_f = save_path + r'/camres676_test.json'
+    out_f = f'{save_path}/camres676_test.json'
     with open(out_f, 'w') as outfile:
         json.dump(test_list, outfile, indent=4)
     print ('Processing CamRes676 Dataset Finished!')

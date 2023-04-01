@@ -76,10 +76,7 @@ def parse_usr_goal(text):
 
 def update_belief_state(prev_bs_list, text):
     res_list = prev_bs_list.copy()
-    prev_slot_set = set()
-    for item in res_list:
-        prev_slot_set.add(item[0])
-    
+    prev_slot_set = {item[0] for item in res_list}
     res_slot_set = prev_slot_set.copy()
     curr_bs_list = parse_usr_goal(text)
     for item in curr_bs_list:
@@ -97,11 +94,9 @@ def update_belief_state(prev_bs_dict, prev_bs_name_list, text):
         raise Exception()
     for item in curr_bs_list:
         slot, value = item
-        if slot in res_bs_dict: 
-            res_bs_dict[slot] = value # update value
-        else:
+        if slot not in res_bs_dict:
             res_bs_name_list.append(slot)
-            res_bs_dict[slot] = value # add new value
+        res_bs_dict[slot] = value # update value
     return res_bs_dict, res_bs_name_list
     
 
@@ -121,25 +116,19 @@ def parse_usr_belief_state(prev_bs_dict, prev_bs_name_list, text, domain):
             slot = token_map_dict[name]
         except KeyError:
             slot = name
-        bs_text += slot + ' ' + bs_dict[name] + ' '
-        bsdx_text += slot + ' '
+        bs_text += f'{slot} {bs_dict[name]} '
+        bsdx_text += f'{slot} '
     bs_text = bs_text.strip().strip(',').strip()
     bsdx_text = bsdx_text.strip().strip(',').strip()
-    if len(bs_text) == 0:
-        bs_text = ''
-    else:
-        bs_text = domain + ' ' + bs_text
-    if len(bsdx_text) == 0:
-        bsdx_text = ''
-    else:
-        bsdx_text = domain + ' ' + bsdx_text.strip()
+    bs_text = '' if len(bs_text) == 0 else f'{domain} {bs_text}'
+    bsdx_text = '' if len(bsdx_text) == 0 else f'{domain} {bsdx_text.strip()}'
     return ' '.join(bs_text.split()).strip(), ' '.join(bsdx_text.split()).strip(), bs_dict, bs_name_list
 
 def parse_one_agent_action(text):
     item_list = text.split('(')
     assert len(item_list) >= 2
-    action_type = '[' + item_list[0].strip() + ']'
-    action_text = action_type + ' '
+    action_type = f'[{item_list[0].strip()}]'
+    action_text = f'{action_type} '
     tuple_list = item_list[1].strip().strip(')').split(';')
     action_list = []
     for one_tuple in tuple_list:
@@ -158,23 +147,20 @@ def parse_agent_action(text, domain):
     for text in split_list:
         if len(text) == 0:
             break
-        else:
-            one_action_type, one_action_list = parse_one_agent_action(text)
-            try:
-                for a in one_action_list:
-                    if a in action_dict[one_action_type]:
-                        pass
-                    else:
-                        action_dict[one_action_type].append(a)
-            except KeyError:
-                action_type_list.append(one_action_type)
-                action_dict[one_action_type] = one_action_list
-    res_text = domain + ' '
+        one_action_type, one_action_list = parse_one_agent_action(text)
+        try:
+            for a in one_action_list:
+                if a not in action_dict[one_action_type]:
+                    action_dict[one_action_type].append(a)
+        except KeyError:
+            action_type_list.append(one_action_type)
+            action_dict[one_action_type] = one_action_list
+    res_text = f'{domain} '
     for key in action_type_list:
-        res_text += key + ' '
+        res_text += f'{key} '
         one_list = action_dict[key]
         for item in one_list:
-            res_text += item + ' '
+            res_text += f'{item} '
         res_text = res_text.strip().strip(',').strip() + ' '
     return ' '.join(res_text.split()).strip()
     
@@ -203,14 +189,16 @@ def process_session_list(session_list, domain):
         one_turn_list = session_list[idx]
         one_usr_uttr, one_usr_bs, one_usr_bsdx, one_system_uttr, one_system_action, \
         bs_dict, bs_name_list = zip_turn(bs_dict, bs_name_list, one_turn_list, domain)
-        
-        one_turn_dict = {'turn_num':idx}
-        one_turn_dict['user'] = one_usr_uttr
-        one_turn_dict['resp'] = one_system_uttr
-        one_turn_dict['turn_domain'] = [domain]
-        one_turn_dict['bspn'] = one_usr_bs
-        one_turn_dict['bsdx'] = one_usr_bsdx
-        one_turn_dict['aspn'] = one_system_action
+
+        one_turn_dict = {
+            'turn_num': idx,
+            'user': one_usr_uttr,
+            'resp': one_system_uttr,
+            'turn_domain': [domain],
+            'bspn': one_usr_bs,
+            'bsdx': one_usr_bsdx,
+            'aspn': one_system_action,
+        }
         res_dict['dialogue_session'].append(one_turn_dict)
     return res_dict
 
@@ -252,17 +240,15 @@ if __name__ == '__main__':
     import json
     import os
     save_path = r'../separate_datasets/MS_E2E/'
-    if os.path.exists(save_path):
-        pass
-    else: # recursively construct directory
+    if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
     import json
-    out_f = save_path + r'/e2e_ms_train.json'
+    out_f = f'{save_path}/e2e_ms_train.json'
     with open(out_f, 'w') as outfile:
         json.dump(train_data_list, outfile, indent=4)
 
-    out_f = save_path + r'/e2e_ms_test.json'
+    out_f = f'{save_path}/e2e_ms_test.json'
     with open(out_f, 'w') as outfile:
         json.dump(test_data_list, outfile, indent=4)
     print ('Processing MSE2E Dataset Finished!')

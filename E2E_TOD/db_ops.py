@@ -50,13 +50,11 @@ class MultiWozDB(object):
 
     def addDBPointer(self, domain, match_num, return_num=False):
         """Create database pointer for all related domains."""
-        # if turn_domains is None:
-        #     turn_domains = db_domains
-        if domain in db_domains:
-            vector = self.oneHotVector(domain, match_num)
-        else:
-            vector = [0, 0, 0 ,0]
-        return vector
+        return (
+            self.oneHotVector(domain, match_num)
+            if domain in db_domains
+            else [0, 0, 0, 0]
+        )
 
     def addDBIndicator(self, domain, match_num, return_num=False):
         """Create database indicator for all related domains."""
@@ -66,13 +64,8 @@ class MultiWozDB(object):
             vector = self.oneHotVector(domain, match_num)
         else:
             vector = [0, 0, 0 ,0]
-        
-        # '[db_nores]', '[db_0]', '[db_1]', '[db_2]', '[db_3]'
-        if vector == [0,0,0,0]:
-            indicator = '[db_nores]'
-        else:
-            indicator = '[db_%s]' % vector.index(1)
-        return indicator
+
+        return '[db_nores]' if vector == [0,0,0,0] else f'[db_{vector.index(1)}]'
 
     def get_match_num(self, constraints, return_entry=False):
         """Create database pointer for all related domains."""
@@ -87,9 +80,7 @@ class MultiWozDB(object):
                 match[domain] = len(matched_ents)
                 if return_entry :
                     entry[domain] = matched_ents
-        if return_entry:
-            return entry
-        return match
+        return entry if return_entry else match
 
 
     def pointerBack(self, vector, domain):
@@ -115,7 +106,7 @@ class MultiWozDB(object):
             report = ''
         else:
             num = vector.index(1)
-            report = domain+': '+nummap[num] + '; '
+            report = f'{domain}: {nummap[num]}; '
 
         if vector[-2] == 0 and vector[-1] == 1:
             report += 'booking: ok'
@@ -138,17 +129,13 @@ class MultiWozDB(object):
         if domain == 'police':
             return self.dbs['police']
         if domain == 'hospital':
-            if constraints.get('department'):
-                for entry in self.dbs['hospital']:
-                    if entry.get('department') == constraints.get('department'):
-                        return [entry]
-            else:
+            if not constraints.get('department'):
                 return []
 
-        valid_cons = False
-        for v in constraints.values():
-            if v not in ["not mentioned", ""]:
-                valid_cons = True
+            for entry in self.dbs['hospital']:
+                if entry.get('department') == constraints.get('department'):
+                    return [entry]
+        valid_cons = any(v not in ["not mentioned", ""] for v in constraints.values())
         if not valid_cons:
             return []
 
@@ -161,7 +148,7 @@ class MultiWozDB(object):
                     cons = constraints['name']
                     dbn = db_ent['name']
                     if cons == dbn:
-                        db_ent = db_ent if not return_name else db_ent['name']
+                        db_ent = db_ent['name'] if return_name else db_ent
                         match_result.append(db_ent)
                         return match_result
 
@@ -171,7 +158,7 @@ class MultiWozDB(object):
                 if s == 'name':
                     continue
                 if s in ['people', 'stay'] or(domain == 'hotel' and s == 'day') or \
-                (domain == 'restaurant' and s in ['day', 'time']):
+                    (domain == 'restaurant' and s in ['day', 'time']):
                     continue
 
                 skip_case = {"don't care":1, "do n't care":1, "dont care":1, "not mentioned":1, "dontcare":1, "":1}
@@ -199,63 +186,60 @@ class MultiWozDB(object):
                         match = False
                     if s == 'leave' and v<time:
                         match = False
-                else:
-                    if exactly_match and v != db_ent[s]:
-                        match = False
-                        break
-                    elif v not in db_ent[s]:
-                        match = False
-                        break
-
+                elif exactly_match and v != db_ent[s] or v not in db_ent[s]:
+                    match = False
+                    break
             if match:
                 match_result.append(db_ent)
 
-        if not return_name:
-            return match_result
-        else:
+        if return_name:
             if domain == 'train':
                 match_result = [e['id'] for e in match_result]
             else:
                 match_result = [e['name'] for e in match_result]
-            return match_result
+        return match_result
 
 
     def querySQL(self, domain, constraints):
         if not self.sql_dbs:
             for dom in db_domains:
-                db = 'db/{}-dbase.db'.format(dom)
+                db = f'db/{dom}-dbase.db'
                 conn = sqlite3.connect(db)
                 c = conn.cursor()
                 self.sql_dbs[dom] = c
 
-        sql_query = "select * from {}".format(domain)
+        sql_query = f"select * from {domain}"
 
 
         flag = True
         for key, val in constraints.items():
-            if val == "" or val == "dontcare" or val == 'not mentioned' or val == "don't care" or val == "dont care" or val == "do n't care":
-                pass
-            else:
+            if val not in [
+                "",
+                "dontcare",
+                'not mentioned',
+                "don't care",
+                "dont care",
+                "do n't care",
+            ]:
+                val2 = val.replace("'", "''")
                 if flag:
                     sql_query += " where "
-                    val2 = val.replace("'", "''")
                     # val2 = normalize(val2)
-                    if key == 'leaveAt':
-                        sql_query += r" " + key + " > " + r"'" + val2 + r"'"
-                    elif key == 'arriveBy':
-                        sql_query += r" " + key + " < " + r"'" + val2 + r"'"
+                    if key == 'arriveBy':
+                        sql_query += f" {key} < '{val2}'"
+                    elif key == 'leaveAt':
+                        sql_query += f" {key} > '{val2}'"
                     else:
-                        sql_query += r" " + key + "=" + r"'" + val2 + r"'"
+                        sql_query += f" {key}='{val2}'"
                     flag = False
                 else:
-                    val2 = val.replace("'", "''")
                     # val2 = normalize(val2)
-                    if key == 'leaveAt':
-                        sql_query += r" and " + key + " > " + r"'" + val2 + r"'"
-                    elif key == 'arriveBy':
-                        sql_query += r" and " + key + " < " + r"'" + val2 + r"'"
+                    if key == 'arriveBy':
+                        sql_query += f" and {key} < '{val2}'"
+                    elif key == 'leaveAt':
+                        sql_query += f" and {key} > '{val2}'"
                     else:
-                        sql_query += r" and " + key + "=" + r"'" + val2 + r"'"
+                        sql_query += f" and {key}='" + val2 + r"'"
 
         try:  # "select * from attraction  where name = 'queens college'"
             print(sql_query)

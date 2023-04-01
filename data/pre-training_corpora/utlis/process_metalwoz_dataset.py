@@ -1,25 +1,26 @@
 def zip_turn(usr_uttr, system_uttr, domain, turn_num):
-    one_turn_dict = {'turn_num': turn_num}
-    one_turn_dict['user'] = usr_uttr
-    one_turn_dict['resp'] = system_uttr
-    one_turn_dict['turn_domain'] = [domain]
-    one_turn_dict['bspn'] = ''
-    one_turn_dict['bsdx'] = ''
-    one_turn_dict['aspn'] = ''
-    return one_turn_dict
+    return {
+        'turn_num': turn_num,
+        'user': usr_uttr,
+        'resp': system_uttr,
+        'turn_domain': [domain],
+        'bspn': '',
+        'bsdx': '',
+        'aspn': '',
+    }
 
 import json
 def parse_one_instance(line):
     res_dict = {'dataset':'MetalWOZ',
                        'dialogue_session':[]}
-    
+
     one_dict = json.loads(line.strip('\n'))
     dialogue_history = one_dict['turns'][1:] # the first sentence is always 'Hello how may I help you?'
     try:
         assert len(dialogue_history) % 2 == 0
     except:
         dialogue_history = dialogue_history[:-1]
-    turn_num = int(len(dialogue_history) / 2)
+    turn_num = len(dialogue_history) // 2
     domain = '[' + one_dict['domain'].lower() + ']'
     for idx in range(turn_num):
         start_idx, end_idx = idx*2, idx*2 + 1
@@ -61,12 +62,12 @@ if __name__ == '__main__':
             all_res_list += one_res_list
 
     print (len(all_res_list))
-    domain_set = set()
-    for item in all_res_list:
-        domain_set.add(item['dialogue_session'][0]['turn_domain'][0])
+    domain_set = {
+        item['dialogue_session'][0]['turn_domain'][0] for item in all_res_list
+    }
     print (len(domain_set))
 
-    idx_list = [idx for idx in range(len(all_res_list))]
+    idx_list = list(range(len(all_res_list)))
     import random
     random.shuffle(idx_list)
 
@@ -85,16 +86,14 @@ if __name__ == '__main__':
     import json
     import os
     save_path = r'../separate_datasets/MetaLWOZ/'
-    if os.path.exists(save_path):
-        pass
-    else: # recursively construct directory
+    if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
-    out_f = save_path + r'/metalwoz_train.json'
+    out_f = f'{save_path}/metalwoz_train.json'
     with open(out_f, 'w') as outfile:
         json.dump(metalwoz_train_list, outfile, indent=4)
-    
-    out_f = save_path + r'/metalwoz_test.json'
+
+    out_f = f'{save_path}/metalwoz_test.json'
     with open(out_f, 'w') as outfile:
         json.dump(metalwoz_dev_list, outfile, indent=4)
     print ('Processing MetalWOZ Dataset Finished!')
